@@ -6,6 +6,8 @@ import MannequinSVG from '@/components/mannequin/MannequinSVG'
 import { COLORS_60 } from '@/lib/colors'
 import { MOOD_GROUPS, LAYER_LEVELS, STYLE_GUIDE, STYLE_ICONS } from '@/lib/styles'
 import { CATEGORY_NAMES } from '@/lib/categories'
+import { evaluationSystem } from '@/lib/evaluation'
+import { profile } from '@/lib/profile'
 import { useRecommend, type RecStep } from '@/hooks/useRecommend'
 
 export default function RecommendCoord() {
@@ -427,7 +429,21 @@ function StepResults({ rec, navigate }: { rec: RecHook, navigate: any }) {
       <h2 className="font-display text-xl font-bold text-warm-900 tracking-tight mb-1">
         추천 코디 {results.length}개
       </h2>
-      <p className="text-sm text-warm-600 mb-4">마네킹을 탭하면 상세를 볼 수 있어요.</p>
+      <p className="text-sm text-warm-600 mb-3">마네킹을 탭하면 상세를 볼 수 있어요.</p>
+
+      {/* 퍼스널컬러·체형 맞춤 토글 */}
+      {profile.hasFitSettings() && (
+        <div className="flex items-center justify-between bg-white border border-warm-400 rounded-2xl px-4 py-3 mb-4 shadow-warm-sm">
+          <div>
+            <div className="text-sm font-semibold text-warm-900">퍼스널컬러·체형 맞춤</div>
+            <div className="text-[11px] text-warm-500 mt-0.5">내 퍼스널컬러와 체형에 맞춰 추천</div>
+          </div>
+          <button onClick={rec.toggleFitMode}
+            className={`w-12 h-7 rounded-full p-0.5 transition-colors ${rec.state.fitMode ? 'bg-terra-500' : 'bg-warm-400'}`}>
+            <div className={`w-6 h-6 rounded-full bg-white shadow transition-transform ${rec.state.fitMode ? 'translate-x-5' : ''}`} />
+          </button>
+        </div>
+      )}
 
       {/* 고정 칩 */}
       {hasPins && (
@@ -522,33 +538,54 @@ function StepResults({ rec, navigate }: { rec: RecHook, navigate: any }) {
 // ═══════════════════════════════════════
 function StepDetail({ rec, navigate }: { rec: RecHook, navigate: any }) {
   const [vizCollapsed, setVizCollapsed] = useState(false)
+  const [saveModal, setSaveModal] = useState(false)
+  const [saveName, setSaveName] = useState('')
   const combo = rec.state.results[rec.state.detailIdx]
   if (!combo) return null
 
   const outfitHex = outfitToHex(combo.outfit)
   const parts = LAYER_LEVELS[rec.state.layerType]?.partKeys || ['top', 'bottom', 'shoes']
 
-  // 점수 원형 차트
+  // evaluationSystem으로 점수 분해도
+  const pc = profile.getPersonalColor()
+  const evalResult = combo.evalResult || evaluationSystem.evaluate(combo.outfit, pc)
+
   const circumference = 2 * Math.PI * 52
-  const offset = circumference * (1 - combo.score / 100)
+  const finalScore = evalResult?.total || combo.score
+  const offset = circumference * (1 - finalScore / 100)
+
+  // 점수 분해 항목
+  const scoreItems = evalResult ? [
+    { label: '골디락스', value: evalResult.goldilocks, max: 33, desc: '2~3색 최적 법칙' },
+    { label: '비율', value: evalResult.ratio, max: 17, desc: '60-30-10 배분' },
+    { label: '조화도', value: evalResult.harmony, max: 17, desc: 'HCL 색상 조화' },
+    { label: '색온도', value: evalResult.season, max: 17, desc: '웜/쿨 일관성' },
+    { label: '밸런스', value: evalResult.balance, max: 8, desc: '명도 분포' },
+    ...(evalResult.hasPersonalColor ? [{ label: '퍼스널컬러', value: evalResult.personal, max: 17, desc: '얼굴 근처 컬러' }] : []),
+    ...(evalResult.hasBodyFit ? [{ label: '체형 맞춤', value: evalResult.bodyFit, max: 8, desc: '체형별 컬러 배치' }] : []),
+  ] : []
+
+  const handleSave = () => {
+    const name = saveName.trim() || combo.name
+    const saved = JSON.parse(localStorage.getItem('cs_saved') || '[]')
+    saved.unshift({ id: Date.now().toString(36), outfit: combo.outfit, score: finalScore, name, createdAt: Date.now() })
+    if (saved.length > 100) saved.length = 100
+    localStorage.setItem('cs_saved', JSON.stringify(saved))
+    setSaveModal(false)
+    setSaveName('')
+    alert('저장했어요!')
+  }
 
   return (
     <div className="animate-screen-enter">
       {/* 마네킹 접기/펼치기 */}
-      <button
-        onClick={() => setVizCollapsed(!vizCollapsed)}
-        className="w-full text-center text-xs text-warm-600 py-2 mb-2 active:opacity-70"
-      >
+      <button onClick={() => setVizCollapsed(!vizCollapsed)} className="w-full text-center text-xs text-warm-600 py-2 mb-2 active:opacity-70">
         {vizCollapsed ? '👤 마네킹 보기 ▼' : '👤 마네킹 접기 ▲'}
       </button>
 
       {!vizCollapsed && (
         <div className="flex justify-center mb-5 py-4 bg-warm-100 rounded-2xl">
-          <MannequinSVG
-            outfit={outfitHex}
-            options={{ outerType: rec.state.outerType, midType: rec.state.midType }}
-            size={200}
-          />
+          <MannequinSVG outfit={outfitHex} options={{ outerType: rec.state.outerType, midType: rec.state.midType }} size={200} />
         </div>
       )}
 
@@ -556,27 +593,25 @@ function StepDetail({ rec, navigate }: { rec: RecHook, navigate: any }) {
       <div className="flex flex-wrap gap-1.5 mb-4">
         <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-terra-100 text-terra-700">{combo.name}</span>
         {combo.tags?.[0] && <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-warm-300 text-warm-700">{combo.tags[0]}</span>}
+        {evalResult?.hasPersonalColor && <span className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-pink-50 text-pink-700">퍼스널컬러✓</span>}
       </div>
 
-      {/* 점수 */}
+      {/* 점수 원형 + 부위 컬러 */}
       <div className="flex items-center gap-5 mb-5">
         <div className="relative w-[120px] h-[120px] flex-shrink-0">
           <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
             <circle cx={60} cy={60} r={52} fill="none" stroke="#E7E5E4" strokeWidth={8} />
             <circle cx={60} cy={60} r={52} fill="none" stroke="#C2785C" strokeWidth={8}
-              strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round"
-              className="transition-all duration-700"
-            />
+              strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" className="transition-all duration-700" />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="font-display text-3xl font-bold text-warm-900">{combo.score}</span>
+            <span className="font-display text-3xl font-bold text-warm-900">{finalScore}</span>
             <span className="text-[10px] text-warm-600">/ 100</span>
           </div>
         </div>
         <div className="flex-1 flex flex-col gap-1.5">
           {parts.map((k: string) => {
-            const colorKey = combo.outfit[k]
-            const c = COLORS_60[colorKey]
+            const colorKey = combo.outfit[k]; const c = COLORS_60[colorKey]
             return (
               <div key={k} className="flex items-center gap-2 text-xs">
                 <span className="w-4 h-4 rounded flex-shrink-0 border border-warm-400" style={{ background: c?.hex || '#ccc' }} />
@@ -588,26 +623,67 @@ function StepDetail({ rec, navigate }: { rec: RecHook, navigate: any }) {
         </div>
       </div>
 
+      {/* 배색 이론 태그 */}
+      {evalResult?.theory && evalResult.theory.length > 0 && (
+        <div className="flex flex-wrap justify-center gap-1.5 mb-4">
+          {evalResult.theory.map((t: string, i: number) => (
+            <span key={i} className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-warm-300 text-warm-700">{t}</span>
+          ))}
+        </div>
+      )}
+
+      {/* 피드백 */}
+      {evalResult?.feedback && (
+        <div className="bg-warm-200 rounded-2xl p-4 text-sm text-warm-800 leading-relaxed mb-5">{evalResult.feedback}</div>
+      )}
+
+      {/* 점수 분해도 */}
+      {scoreItems.length > 0 && (
+        <div className="bg-white border border-warm-400 rounded-2xl p-4 mb-5 shadow-warm-sm">
+          {scoreItems.map((item, idx) => (
+            <div key={idx} className="mb-2.5 last:mb-0">
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="text-warm-700 font-medium">{item.label}</span>
+                <span className="text-warm-500">{Math.round(item.value)} / {item.max}</span>
+              </div>
+              <div className="h-1.5 bg-warm-300 rounded-full overflow-hidden">
+                <div className="h-full bg-terra-500 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (item.value / item.max) * 100)}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* 액션 버튼 */}
       <div className="flex flex-col gap-2.5 mb-5">
-        <button onClick={() => {
-            const combo = rec.state.results[rec.state.detailIdx]; if(!combo) return
-            const saved = JSON.parse(localStorage.getItem('cs_saved') || '[]')
-            saved.unshift({ id: Date.now().toString(36), outfit: combo.outfit, score: combo.score, name: combo.name, createdAt: Date.now() })
-            localStorage.setItem('cs_saved', JSON.stringify(saved)); alert('저장했어요!')
-          }} className="w-full py-3.5 bg-terra-500 text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-terra">
+        <button onClick={() => { setSaveName(combo.name); setSaveModal(true) }} className="w-full py-3.5 bg-terra-500 text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-terra">
           <Bookmark size={18} /> 이 코디 저장하기
         </button>
-        <button onClick={() => { const combo = rec.state.results[rec.state.detailIdx]; navigator.share?.({ title: '바루픽 코디', text: combo?.name + ' ' + combo?.score + '점', url: 'https://barupick-react.vercel.app' }).catch(() => {}) }} className="w-full py-3 bg-white border border-warm-400 text-warm-800 rounded-2xl font-medium text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
+        <button onClick={() => { navigator.share?.({ title: '바루픽 코디', text: combo?.name + ' ' + finalScore + '점', url: 'https://barupick-react.vercel.app' }).catch(() => {}) }} className="w-full py-3 bg-white border border-warm-400 text-warm-800 rounded-2xl font-medium text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
           <Share size={16} /> 이 조합 공유하기
         </button>
         <button onClick={() => {
-            const combo = rec.state.results[rec.state.detailIdx]; if(!combo) return
             localStorage.setItem('_pending_post_outfit', JSON.stringify(combo.outfit)); window.location.href = '/community/post'
           }} className="w-full py-3 bg-warm-900 text-white rounded-2xl font-medium text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
           <Users size={16} /> 커뮤니티에 공유
         </button>
       </div>
+
+      {/* 저장 모달 */}
+      {saveModal && (
+        <div className="fixed inset-0 z-[300] bg-black/50 flex items-center justify-center px-8" onClick={() => setSaveModal(false)}>
+          <div className="bg-white dark:bg-warm-800 rounded-2xl p-5 w-full max-w-sm shadow-warm-lg" onClick={e => e.stopPropagation()}>
+            <div className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-3">코디 저장</div>
+            <input type="text" value={saveName} onChange={e => setSaveName(e.target.value)} maxLength={30} autoFocus
+              placeholder="코디 이름을 입력하세요"
+              className="w-full px-4 py-3 bg-warm-100 dark:bg-warm-700 border border-warm-400 dark:border-warm-600 rounded-xl text-sm text-warm-900 dark:text-warm-100 placeholder-warm-500 focus:outline-none focus:border-terra-400 mb-4" />
+            <div className="flex gap-2">
+              <button onClick={() => setSaveModal(false)} className="flex-1 py-2.5 bg-warm-200 dark:bg-warm-700 text-warm-700 dark:text-warm-300 rounded-xl text-sm font-medium active:scale-[0.98]">취소</button>
+              <button onClick={handleSave} className="flex-1 py-2.5 bg-terra-500 text-white rounded-xl text-sm font-semibold active:scale-[0.98] shadow-terra">저장</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 색상 개선하기 */}
       <div className="bg-white border border-warm-400 rounded-2xl p-4 mb-5 shadow-warm-sm">

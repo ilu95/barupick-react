@@ -8,7 +8,7 @@ import { gamification } from '@/lib/gamification'
 import { profile as profileLib } from '@/lib/profile'
 import { PERSONAL_COLOR_12 } from '@/lib/personalColor'
 import { BODY_GUIDE_DATA } from '@/lib/bodyType'
-import ImageEditor from '@/components/ui/ImageEditor'
+import CropOverlay from '@/components/ui/CropOverlay'
 
 export default function Profile() {
   const navigate = useNavigate()
@@ -258,12 +258,14 @@ export default function Profile() {
         }} last />
       </MenuSection>
 
-      {/* 아바타 편집기 */}
+      {/* 아바타 크롭 (원형) */}
       {avatarEditSrc && (
-        <ImageEditor
+        <CropOverlay
           src={avatarEditSrc}
-          cropMode="square"
-          onSave={handleAvatarSave}
+          shape="circle"
+          title="프로필 사진"
+          outputSize={400}
+          onDone={handleAvatarSave}
           onCancel={() => setAvatarEditSrc(null)}
         />
       )}

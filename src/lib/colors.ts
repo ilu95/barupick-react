@@ -225,3 +225,34 @@ export function getColorTemperature(h: number, c: number, l: number) {
     else tempResult = 'neutral';
     return { temp: tempResult, score: warmScore };
 }
+
+// ─── 클래식/피해야 할 조합 (evaluation.ts, recommend.ts 공용) ───
+export const CLASSIC_COMBOS: Record<string, string[]> = {
+    'navy': ['burgundy', 'wine', 'olive', 'brown', 'dark_olive', 'forest', 'red', 'maroon'],
+    'burgundy': ['navy', 'olive', 'dark_green', 'forest', 'brown', 'camel', 'dark_olive', 'pink', 'pastel_pink'],
+    'olive': ['burgundy', 'navy', 'brown', 'wine', 'dark_brown', 'khaki', 'taupe', 'camel'],
+    'brown': ['navy', 'burgundy', 'olive', 'dark_green', 'taupe', 'khaki'],
+    'wine': ['navy', 'olive', 'camel', 'brown', 'khaki', 'pastel_pink'],
+    'forest': ['burgundy', 'navy', 'brown', 'wine', 'camel'],
+    'dark_green': ['burgundy', 'brown', 'camel', 'navy', 'wine', 'khaki'],
+    'dark_olive': ['burgundy', 'navy', 'wine', 'camel'],
+    'red': ['navy', 'charcoal'],
+    'maroon': ['navy', 'camel', 'beige', 'khaki'],
+    'taupe': ['olive', 'burgundy', 'navy', 'brown', 'camel', 'khaki'],
+    'khaki': ['olive', 'burgundy', 'navy', 'brown', 'wine', 'taupe', 'dark_green', 'camel'],
+    'camel': ['olive', 'burgundy', 'navy', 'wine', 'forest', 'dark_green', 'dark_olive', 'khaki'],
+    'blue': ['purple', 'royal_blue', 'navy'],
+    'purple': ['blue', 'pink', 'magenta', 'burgundy'],
+};
+
+export const AVOID_COMBOS: Record<string, string[]> = {
+    'black': ['navy', 'dark_blue', 'midnight', 'charcoal'],
+    'navy': ['black', 'dark_blue', 'midnight', 'indigo'],
+    'charcoal': ['black'],
+    'red': ['orange', 'magenta', 'coral', 'pink', 'green', 'lime', 'emerald', 'forest', 'dark_green'],
+    'green': ['red', 'magenta', 'pink', 'dark_red', 'maroon'],
+    'dark_green': ['red', 'dark_red', 'maroon'],
+    'forest': ['red', 'dark_red', 'maroon'],
+    'burgundy': ['wine', 'maroon', 'dark_red'],
+    'brown': ['dark_brown', 'chocolate', 'espresso'],
+};

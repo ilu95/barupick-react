@@ -179,7 +179,7 @@ export default function PcLight() {
     )
   }
 
-  // ═══ 빛 투사 (프로젝션) ═══
+  // ═══ 빛 투사 (프로젝션) — 세로 3등분: A | 블랙 | B ═══
   if (mode === 'project') {
     const steps = getSteps()
     const step = steps[stepIndex]
@@ -187,12 +187,17 @@ export default function PcLight() {
     return (
       <div className="fixed inset-0 z-[9999] bg-black flex flex-col">
         <div className="flex-1 flex">
-          <div className="flex-1 flex items-center justify-center" style={{ background: step.leftColor }}>
-            <span className="text-white/60 text-3xl font-bold drop-shadow-lg">A</span>
+          {/* A 영역 (왼쪽 40%) */}
+          <div className="flex-[2] flex items-center justify-center" style={{ background: step.leftColor }}>
+            <span className="text-white/50 text-4xl font-bold drop-shadow-lg">A</span>
           </div>
-          <div className="w-[2px] bg-black flex-shrink-0" />
-          <div className="flex-1 flex items-center justify-center" style={{ background: step.rightColor }}>
-            <span className="text-white/60 text-3xl font-bold drop-shadow-lg">B</span>
+          {/* 블랙 분리대 (가운데 20%) — 빛 겹침 방지 */}
+          <div className="flex-1 bg-black flex items-center justify-center">
+            <span className="text-white/20 text-xs font-medium">◀ ▶</span>
+          </div>
+          {/* B 영역 (오른쪽 40%) */}
+          <div className="flex-[2] flex items-center justify-center" style={{ background: step.rightColor }}>
+            <span className="text-white/50 text-4xl font-bold drop-shadow-lg">B</span>
           </div>
         </div>
         <div className="flex-shrink-0 bg-black/90 px-4 pt-3 pb-6">
@@ -226,11 +231,11 @@ export default function PcLight() {
         <div className="text-xs text-white/40 font-semibold mb-1">{step.phase}</div>
         <div className="text-lg font-bold mb-4">STEP {step.stepNum} / 7</div>
 
-        {/* 미리보기 */}
+        {/* 미리보기 — 3등분 */}
         <div className="flex h-16 rounded-xl overflow-hidden mb-4">
-          <div className="flex-1 flex items-center justify-center" style={{ background: step.leftColor }}><span className="text-white/70 font-bold text-xl">A</span></div>
-          <div className="w-[2px] bg-black" />
-          <div className="flex-1 flex items-center justify-center" style={{ background: step.rightColor }}><span className="text-white/70 font-bold text-xl">B</span></div>
+          <div className="flex-[2] flex items-center justify-center" style={{ background: step.leftColor }}><span className="text-white/70 font-bold text-xl">A</span></div>
+          <div className="flex-1 bg-black flex items-center justify-center"><span className="text-white/20 text-[10px]">◀ ▶</span></div>
+          <div className="flex-[2] flex items-center justify-center" style={{ background: step.rightColor }}><span className="text-white/70 font-bold text-xl">B</span></div>
         </div>
 
         <div className="text-[15px] font-semibold leading-relaxed whitespace-pre-line mb-3">{step.instruction}</div>
@@ -275,11 +280,11 @@ export default function PcLight() {
 
       <div className="text-sm font-semibold mb-2">화면 구성</div>
       <div className="flex h-14 rounded-xl overflow-hidden mb-2">
-        <div className="flex-1 flex items-center justify-center" style={{ background: '#FFA898' }}><span className="text-white/70 font-bold">A</span></div>
-        <div className="w-[2px] bg-black" />
-        <div className="flex-1 flex items-center justify-center" style={{ background: '#F8A0C0' }}><span className="text-white/70 font-bold">B</span></div>
+        <div className="flex-[2] flex items-center justify-center" style={{ background: '#FFA898' }}><span className="text-white/70 font-bold">A</span></div>
+        <div className="flex-1 bg-black flex items-center justify-center"><span className="text-white/20 text-[10px]">◀ ▶</span></div>
+        <div className="flex-[2] flex items-center justify-center" style={{ background: '#F8A0C0' }}><span className="text-white/70 font-bold">B</span></div>
       </div>
-      <div className="text-[11px] text-white/30 text-center mb-5">같은 색 계열, 톤만 달라요</div>
+      <div className="text-[11px] text-white/30 text-center mb-5">같은 색 계열, 톤만 달라요 · 가운데 검정 영역이 빛 겹침을 방지해요</div>
 
       <div className="bg-white/5 rounded-xl px-4 py-3 mb-4 text-xs text-white/50 leading-relaxed">
         <div className="font-semibold text-white/70 mb-1">💡 이것만 기억하세요</div>

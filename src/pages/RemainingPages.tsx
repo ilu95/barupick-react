@@ -11,7 +11,7 @@ import { STYLE_GUIDE, MOOD_GROUPS, LAYER_LEVELS, STYLE_ICONS } from '@/lib/style
 import { STYLE_MOODS } from '@/lib/styleMoods'
 import { PERSONAL_COLOR_12, PERSONAL_COLOR_DIAGNOSIS } from '@/lib/personalColor'
 import { BODY_GUIDE_DATA, BODY_TYPE_DIAGNOSIS, BODY_QUIZ_QUESTIONS } from '@/lib/bodyType'
-import { CATEGORY_NAMES, FABRIC_ITEMS, FABRIC_SEASONS, FABRIC_COMPAT_RULES, evaluateFabricCombo } from '@/lib/categories'
+import { CATEGORY_NAMES, FABRIC_ITEMS, FABRIC_SEASONS, FABRIC_COMPAT_RULES, evaluateFabricCombo, getFabricCompat } from '@/lib/categories'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { profile } from '@/lib/profile'
@@ -250,12 +250,12 @@ export function Quiz() {
   )
 }
 
-// ─── 소재 가이드 3단계 ───
+// ─── 소재 가이드 — 실전 궁합 체크 ───
 export function FabricGuide() {
   const navigate = useNavigate()
-  const [step, setStep] = useState<'browse' | 'pick' | 'summary'>('browse')
-  const [selectedPart, setSelectedPart] = useState<string | null>(null)
-  const [selections, setSelections] = useState<Record<string, any>>({})
+  const [slots, setSlots] = useState<(any | null)[]>([null, null])
+  const [editingSlot, setEditingSlot] = useState<number | null>(null)
+  const [editCat, setEditCat] = useState<string | null>(null)
 
   const currentSeason = (() => {
     const m = new Date().getMonth()
@@ -266,163 +266,187 @@ export function FabricGuide() {
   })()
   const [seasonFilter, setSeasonFilter] = useState<string | null>(currentSeason)
 
-  const handleSelect = (part: string, item: any) => {
-    setSelections(prev => {
-      const next = { ...prev }
-      if (next[part]?.id === item.id) delete next[part]
-      else next[part] = item
+  const filledSlots = slots.filter(Boolean)
+  const ratingLabels = { great: '추천', ok: '무난', bad: '비추' }
+  const ratingEmojis = { great: '✅', ok: '➖', bad: '⚠️' }
+  const ratingStyles = {
+    great: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-400',
+    ok: 'bg-warm-50 dark:bg-warm-800 border-warm-300 dark:border-warm-600 text-warm-600 dark:text-warm-400',
+    bad: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400',
+  }
+
+  // 궁합 계산 (선택된 모든 아이템 쌍)
+  const allPairs = useMemo(() => {
+    const filled = slots.map((s, i) => s ? { idx: i, item: s } : null).filter(Boolean)
+    const pairs = []
+    for (let i = 0; i < filled.length; i++) {
+      for (let j = i + 1; j < filled.length; j++) {
+        const compat = getFabricCompat(filled[i].item, filled[j].item)
+        pairs.push({
+          a: filled[i], b: filled[j],
+          rating: compat?.rating || 'ok',
+          reason: compat?.reason || '특별한 궁합 규칙 없음 — 무난한 조합',
+        })
+      }
+    }
+    return pairs
+  }, [slots])
+
+  const selectItem = (item: any) => {
+    if (editingSlot === null) return
+    setSlots(prev => { const next = [...prev]; next[editingSlot] = { ...item, _part: editCat }; return next })
+    setEditingSlot(null)
+    setEditCat(null)
+  }
+
+  const removeSlot = (idx: number) => {
+    setSlots(prev => {
+      const next = prev.filter((_, i) => i !== idx)
+      if (next.length < 2) next.push(null)
       return next
     })
   }
 
-  // 1단계: 부위별 아이템 탐색
-  if (step === 'browse') {
-    const parts = Object.keys(FABRIC_ITEMS).filter(k => FABRIC_ITEMS[k]?.length > 0)
-    return (
-      <div className="animate-screen-fade px-5 pt-2 pb-10">
-        <h2 className="font-display text-xl font-bold text-warm-900 dark:text-warm-100 tracking-tight mb-1">소재 가이드</h2>
-        <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">부위별 아이템과 소재 특성을 확인하세요</p>
-
-        {/* 계절 필터 */}
-        <div className="flex gap-1.5 mb-5 overflow-x-auto hide-scrollbar">
-          <button onClick={() => setSeasonFilter(null)} className={`px-3 py-1.5 rounded-full text-[11px] font-semibold flex-shrink-0 transition-all ${!seasonFilter ? 'bg-terra-500 text-white' : 'bg-warm-200 dark:bg-warm-700 text-warm-600 dark:text-warm-400'}`}>전체</button>
-          {Object.entries(FABRIC_SEASONS).map(([k, s]) => (
-            <button key={k} onClick={() => setSeasonFilter(seasonFilter === k ? null : k)} className={`px-3 py-1.5 rounded-full text-[11px] font-semibold flex-shrink-0 transition-all ${seasonFilter === k ? 'bg-terra-500 text-white' : 'bg-warm-200 dark:bg-warm-700 text-warm-600 dark:text-warm-400'}`}>{s.emoji} {s.name}</button>
-          ))}
-        </div>
-
-        {parts.map(part => {
-          const items = FABRIC_ITEMS[part]
-          const filtered = seasonFilter ? items.filter(i => i.seasons.includes(seasonFilter)) : items
-          if (filtered.length === 0) return null
-          return (
-            <div key={part} className="mb-5">
-              <div className="text-xs font-semibold text-warm-600 dark:text-warm-400 tracking-widest uppercase mb-2.5">{(CATEGORY_NAMES as any)?.[part] || part}</div>
-              <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
-                {filtered.map(item => (
-                  <div key={item.id} className="flex-shrink-0 w-[130px] bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-xl p-3 shadow-warm-sm">
-                    <div className="text-lg mb-1">{item.icon}</div>
-                    <div className="text-[12px] font-semibold text-warm-900 dark:text-warm-100">{item.name}</div>
-                    <div className="text-[10px] text-warm-500 dark:text-warm-400 mt-0.5 leading-snug">{item.desc}</div>
-                    <div className="flex gap-0.5 mt-1.5">{item.seasons.map(s => <span key={s} className="text-[9px]">{FABRIC_SEASONS[s]?.emoji}</span>)}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )
-        })}
-
-        <button onClick={() => setStep('pick')} className="w-full py-3.5 bg-terra-500 text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-terra mt-2">
-          <Scissors size={16} /> 소재 궁합 체크하기
-        </button>
-      </div>
-    )
+  const addSlot = () => {
+    if (slots.length >= 6) return
+    setSlots(prev => [...prev, null])
   }
 
-  // 2단계: 부위별 소재 선택
-  if (step === 'pick') {
-    const parts = Object.keys(FABRIC_ITEMS).filter(k => FABRIC_ITEMS[k]?.length > 0)
+  const parts = Object.keys(FABRIC_ITEMS).filter(k => FABRIC_ITEMS[k]?.length > 0)
+
+  // ─── 아이템 선택 모드 ───
+  if (editingSlot !== null) {
+    const items = editCat ? (FABRIC_ITEMS[editCat] || []) : []
+    const filtered = editCat && seasonFilter ? items.filter(i => i.seasons.includes(seasonFilter)) : items
+
     return (
       <div className="animate-screen-enter px-5 pt-2 pb-10">
-        <button onClick={() => setStep('browse')} className="flex items-center gap-1 text-sm text-warm-600 dark:text-warm-400 mb-4 active:opacity-70"><ArrowLeft size={16} /> 뒤로</button>
-        <h2 className="font-display text-xl font-bold text-warm-900 dark:text-warm-100 tracking-tight mb-1">소재 선택</h2>
-        <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">각 부위의 소재를 골라 궁합을 확인하세요</p>
+        <button onClick={() => { setEditingSlot(null); setEditCat(null) }} className="flex items-center gap-1 text-sm text-warm-600 dark:text-warm-400 mb-4 active:opacity-70"><ArrowLeft size={16} /> 돌아가기</button>
 
-        <div className="flex gap-1.5 mb-5 overflow-x-auto hide-scrollbar">
-          <button onClick={() => setSeasonFilter(null)} className={`px-3 py-1.5 rounded-full text-[11px] font-semibold flex-shrink-0 transition-all ${!seasonFilter ? 'bg-terra-500 text-white' : 'bg-warm-200 dark:bg-warm-700 text-warm-600 dark:text-warm-400'}`}>전체</button>
-          {Object.entries(FABRIC_SEASONS).map(([k, s]) => (
-            <button key={k} onClick={() => setSeasonFilter(seasonFilter === k ? null : k)} className={`px-3 py-1.5 rounded-full text-[11px] font-semibold flex-shrink-0 transition-all ${seasonFilter === k ? 'bg-terra-500 text-white' : 'bg-warm-200 dark:bg-warm-700 text-warm-600 dark:text-warm-400'}`}>{s.emoji} {s.name}</button>
-          ))}
-        </div>
-
-        {parts.map(part => {
-          const items = FABRIC_ITEMS[part]
-          const filtered = seasonFilter ? items.filter(i => i.seasons.includes(seasonFilter)) : items
-          if (filtered.length === 0) return null
-          const sel = selections[part]
-          return (
-            <div key={part} className="mb-5">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-semibold text-warm-600 dark:text-warm-400 uppercase tracking-widest">{(CATEGORY_NAMES as any)?.[part]}</span>
-                {sel && <span className="text-[10px] text-terra-600 dark:text-terra-400 font-medium ml-auto">{sel.name}</span>}
-              </div>
-              <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
-                {filtered.map(item => {
-                  const isSel = sel?.id === item.id
-                  return (
-                    <button key={item.id} onClick={() => handleSelect(part, item)} className={`flex-shrink-0 w-[120px] border rounded-xl p-2.5 text-left transition-all active:scale-[0.97] ${isSel ? 'bg-terra-50 dark:bg-terra-900/30 border-terra-400 shadow-warm' : 'bg-white dark:bg-warm-800 border-warm-400 dark:border-warm-600 shadow-warm-sm'}`}>
-                      <div className="text-lg mb-1">{item.icon}</div>
-                      <div className="text-[12px] font-semibold text-warm-900 dark:text-warm-100">{item.name}</div>
-                      <div className="text-[10px] text-warm-500 dark:text-warm-400 mt-0.5 leading-snug">{item.desc}</div>
-                    </button>
-                  )
-                })}
-              </div>
+        {!editCat ? (
+          <>
+            <h2 className="font-display text-lg font-bold text-warm-900 dark:text-warm-100 mb-1">어떤 부위인가요?</h2>
+            <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">{editingSlot === 0 ? '입고 있는' : '함께 입을'} 아이템의 부위를 선택하세요</p>
+            <div className="grid grid-cols-3 gap-2.5">
+              {parts.map(part => (
+                <button key={part} onClick={() => setEditCat(part)} className="bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl py-5 px-2 text-center shadow-warm-sm active:scale-[0.97] transition-all">
+                  <div className="text-2xl mb-1.5">{FABRIC_ITEMS[part]?.[0]?.icon || '👔'}</div>
+                  <div className="text-[13px] font-medium text-warm-800 dark:text-warm-200">{(CATEGORY_NAMES as any)?.[part]}</div>
+                </button>
+              ))}
             </div>
-          )
-        })}
+          </>
+        ) : (
+          <>
+            <h2 className="font-display text-lg font-bold text-warm-900 dark:text-warm-100 mb-1">{(CATEGORY_NAMES as any)?.[editCat]} 아이템</h2>
+            <p className="text-sm text-warm-600 dark:text-warm-400 mb-3">소재를 선택하세요</p>
 
-        <button onClick={() => { if (Object.keys(selections).length >= 2) setStep('summary'); else alert('2개 이상 부위의 소재를 선택해주세요') }} className={`w-full py-3.5 ${Object.keys(selections).length >= 2 ? 'bg-terra-500 shadow-terra' : 'bg-warm-400 dark:bg-warm-600'} text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all`}>
-          궁합 결과 보기 ({Object.keys(selections).length}개 선택됨) <ArrowRight size={18} />
-        </button>
+            <div className="flex gap-1.5 mb-4 overflow-x-auto hide-scrollbar">
+              <button onClick={() => setSeasonFilter(null)} className={`px-3 py-1.5 rounded-full text-[11px] font-semibold flex-shrink-0 transition-all ${!seasonFilter ? 'bg-terra-500 text-white' : 'bg-warm-200 dark:bg-warm-700 text-warm-600 dark:text-warm-400'}`}>전체</button>
+              {Object.entries(FABRIC_SEASONS).map(([k, s]) => (
+                <button key={k} onClick={() => setSeasonFilter(seasonFilter === k ? null : k)} className={`px-3 py-1.5 rounded-full text-[11px] font-semibold flex-shrink-0 transition-all ${seasonFilter === k ? 'bg-terra-500 text-white' : 'bg-warm-200 dark:bg-warm-700 text-warm-600 dark:text-warm-400'}`}>{s.emoji} {s.name}</button>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {filtered.map(item => (
+                <button key={item.id} onClick={() => selectItem(item)} className="w-full flex items-center gap-3 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-xl p-3 text-left shadow-warm-sm active:scale-[0.98] transition-all">
+                  <span className="text-xl flex-shrink-0">{item.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-warm-900 dark:text-warm-100">{item.name}</div>
+                    <div className="text-[11px] text-warm-500 dark:text-warm-400">{item.desc}</div>
+                  </div>
+                  <div className="flex gap-0.5 flex-shrink-0">{item.seasons.map(s => <span key={s} className="text-[9px]">{FABRIC_SEASONS[s]?.emoji}</span>)}</div>
+                </button>
+              ))}
+              {filtered.length === 0 && <div className="text-center py-8 text-sm text-warm-500 dark:text-warm-400">이 계절에 해당하는 아이템이 없어요</div>}
+            </div>
+
+            <button onClick={() => setEditCat(null)} className="w-full text-center text-sm text-warm-500 dark:text-warm-400 mt-4 active:opacity-70">← 다른 부위 선택</button>
+          </>
+        )}
       </div>
     )
   }
 
-  // 3단계: 궁합 결과
-  const pairs = evaluateFabricCombo(selections)
-  const greatCount = pairs.filter(p => p.rating === 'great').length
-  const okCount = pairs.filter(p => p.rating === 'ok').length
-  const badCount = pairs.filter(p => p.rating === 'bad').length
-  const totalScore = Math.round(((greatCount * 3 + okCount * 1) / Math.max(pairs.length, 1)) * 33)
-  const ratingIcons = { great: <ThumbsUp size={14} className="text-green-600" />, ok: <Minus size={14} className="text-warm-500" />, bad: <ThumbsDown size={14} className="text-red-500" /> }
-  const ratingColors = { great: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800', ok: 'bg-warm-50 dark:bg-warm-800 border-warm-300 dark:border-warm-600', bad: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' }
-
+  // ─── 메인 화면: 슬롯 + 실시간 궁합 ───
   return (
-    <div className="animate-screen-enter px-5 pt-2 pb-10">
-      <button onClick={() => setStep('pick')} className="flex items-center gap-1 text-sm text-warm-600 dark:text-warm-400 mb-4 active:opacity-70"><ArrowLeft size={16} /> 소재 수정</button>
+    <div className="animate-screen-fade px-5 pt-2 pb-10">
+      <h2 className="font-display text-xl font-bold text-warm-900 dark:text-warm-100 tracking-tight mb-1">소재 궁합 체크</h2>
+      <p className="text-sm text-warm-600 dark:text-warm-400 mb-5">입고 싶은 아이템을 선택하면 소재 궁합을 바로 알려드려요</p>
 
-      <div className="text-center mb-5">
-        <div className="text-4xl mb-2">{badCount === 0 ? '✨' : badCount <= 1 ? '👍' : '⚠️'}</div>
-        <h2 className="font-display text-xl font-bold text-warm-900 dark:text-warm-100">{badCount === 0 ? '완벽한 소재 조합!' : badCount <= 1 ? '괜찮은 조합이에요' : '일부 소재가 충돌해요'}</h2>
-        <div className="flex justify-center gap-4 mt-3 text-sm">
-          {greatCount > 0 && <span className="text-green-600 dark:text-green-400 font-semibold">추천 {greatCount}</span>}
-          {okCount > 0 && <span className="text-warm-600 dark:text-warm-400 font-medium">무난 {okCount}</span>}
-          {badCount > 0 && <span className="text-red-500 dark:text-red-400 font-semibold">비추 {badCount}</span>}
-        </div>
-      </div>
-
-      {/* 선택한 소재 요약 */}
-      <div className="flex gap-2 flex-wrap justify-center mb-5">
-        {Object.entries(selections).map(([part, item]) => (
-          <div key={part} className="flex items-center gap-1.5 bg-terra-50 dark:bg-terra-900/30 border border-terra-200 dark:border-terra-800 rounded-full px-3 py-1.5 text-[11px]">
-            <span className="font-semibold text-terra-700 dark:text-terra-400">{(CATEGORY_NAMES as any)?.[part]}</span>
-            <span className="text-warm-600 dark:text-warm-400">{item.name}</span>
+      {/* 아이템 슬롯 */}
+      <div className="flex flex-col gap-2.5 mb-5">
+        {slots.map((slot, idx) => (
+          <div key={idx} className="flex items-center gap-2.5">
+            {slot ? (
+              <button onClick={() => { setEditingSlot(idx); setEditCat(slot._part || null) }} className="flex-1 flex items-center gap-3 bg-terra-50 dark:bg-terra-900/30 border border-terra-200 dark:border-terra-800 rounded-2xl px-4 py-3 text-left active:scale-[0.98] transition-all">
+                <span className="text-xl flex-shrink-0">{slot.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-terra-700 dark:text-terra-400">{slot.name}</div>
+                  <div className="text-[11px] text-warm-600 dark:text-warm-400">{(CATEGORY_NAMES as any)?.[slot._part]} · {slot.desc}</div>
+                </div>
+              </button>
+            ) : (
+              <button onClick={() => { setEditingSlot(idx); setEditCat(null) }} className="flex-1 flex items-center gap-3 bg-white dark:bg-warm-800 border-2 border-dashed border-warm-400 dark:border-warm-600 rounded-2xl px-4 py-4 text-left active:scale-[0.98] transition-all">
+                <span className="text-xl text-warm-400">+</span>
+                <span className="text-sm text-warm-500 dark:text-warm-400">{idx === 0 ? '입고 있는 아이템 선택' : '함께 입을 아이템 선택'}</span>
+              </button>
+            )}
+            {slot && slots.length > 2 && (
+              <button onClick={() => removeSlot(idx)} className="w-8 h-8 rounded-full bg-warm-200 dark:bg-warm-700 flex items-center justify-center flex-shrink-0 active:scale-90 transition-transform text-warm-500 text-xs">✕</button>
+            )}
           </div>
         ))}
+
+        {slots.length < 6 && filledSlots.length >= 2 && (
+          <button onClick={addSlot} className="w-full py-2.5 border border-dashed border-warm-400 dark:border-warm-600 rounded-xl text-xs text-warm-500 dark:text-warm-400 font-medium active:scale-[0.98] transition-all">
+            + 아이템 추가 (최대 6개)
+          </button>
+        )}
       </div>
 
-      {/* 궁합 쌍별 결과 */}
-      <div className="flex flex-col gap-2 mb-5">
-        {pairs.map((p, idx) => (
-          <div key={idx} className={`flex items-start gap-2.5 border rounded-xl px-3.5 py-2.5 ${ratingColors[p.rating]}`}>
-            <div className="flex-shrink-0 mt-0.5">{ratingIcons[p.rating]}</div>
-            <div className="flex-1">
-              <div className="flex items-center gap-1.5 text-[12px] font-semibold text-warm-800 dark:text-warm-200">
-                {p.itemA?.name || (CATEGORY_NAMES as any)?.[p.partA]}
-                <span className="text-warm-400">×</span>
-                {p.itemB?.name || (CATEGORY_NAMES as any)?.[p.partB]}
+      {/* 실시간 궁합 결과 */}
+      {allPairs.length > 0 && (
+        <div className="mb-5">
+          <div className="text-xs font-semibold text-warm-600 dark:text-warm-400 tracking-widest uppercase mb-3">궁합 결과</div>
+          <div className="flex flex-col gap-2">
+            {allPairs.map((pair, idx) => (
+              <div key={idx} className={`flex items-start gap-2.5 border rounded-xl px-3.5 py-3 ${ratingStyles[pair.rating]}`}>
+                <span className="text-lg flex-shrink-0 mt-0.5">{ratingEmojis[pair.rating]}</span>
+                <div className="flex-1">
+                  <div className="flex items-center gap-1.5 text-[13px] font-semibold">
+                    {pair.a.item.name}
+                    <span className="text-warm-400 font-normal">×</span>
+                    {pair.b.item.name}
+                    <span className={`ml-auto text-[11px] font-bold`}>{ratingLabels[pair.rating]}</span>
+                  </div>
+                  <div className="text-[11px] opacity-80 leading-relaxed mt-0.5">{pair.reason}</div>
+                </div>
               </div>
-              <div className="text-[11px] text-warm-600 dark:text-warm-400 leading-relaxed mt-0.5">{p.reason}</div>
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
 
-      <div className="flex gap-2.5">
-        <button onClick={() => setStep('pick')} className="flex-1 py-3 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 text-warm-800 dark:text-warm-200 rounded-2xl font-medium text-sm active:scale-[0.98] transition-all">소재 수정</button>
-        <button onClick={() => { setSelections({}); setStep('browse') }} className="flex-1 py-3 bg-terra-500 text-white rounded-2xl font-semibold text-sm active:scale-[0.98] transition-all shadow-terra">처음으로</button>
-      </div>
+      {/* 안내 */}
+      {filledSlots.length < 2 && (
+        <div className="text-center py-6">
+          <div className="text-3xl mb-3">👆</div>
+          <div className="text-sm text-warm-600 dark:text-warm-400 leading-relaxed">
+            2개 이상 아이템을 선택하면<br />소재 궁합을 바로 확인할 수 있어요
+          </div>
+          <div className="text-xs text-warm-500 dark:text-warm-400 mt-3 leading-relaxed">
+            예) 데님 자켓 + 울 니트 → 추천 조합!<br />
+            실크 블라우스 + 플리스 → 격식 차이 충돌
+          </div>
+        </div>
+      )}
+
+      {/* 전체 초기화 */}
+      {filledSlots.length > 0 && (
+        <button onClick={() => setSlots([null, null])} className="w-full py-2.5 text-sm text-warm-500 dark:text-warm-400 text-center active:opacity-70">초기화</button>
+      )}
     </div>
   )
 }

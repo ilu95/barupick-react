@@ -4,6 +4,7 @@ import { Palette, Image, Tag, Smile, Eye, Calendar, Check, Camera, Lock, Users, 
 import MannequinSVG from '@/components/mannequin/MannequinSVG'
 import ColorPicker from '@/components/ui/ColorPicker'
 import ImageEditor from '@/components/ui/ImageEditor'
+import CropOverlay from '@/components/ui/CropOverlay'
 import { COLORS_60 } from '@/lib/colors'
 import { useOotd } from '@/hooks/useOotd'
 import { useAuth } from '@/contexts/AuthContext'
@@ -40,6 +41,7 @@ export default function OotdRecord() {
   const [saveError, setSaveError] = useState('')
   const [customSit, setCustomSit] = useState(false)
   const [editingPhotoIdx, setEditingPhotoIdx] = useState<number | null>(null)
+  const [cropSrc, setCropSrc] = useState<string | null>(null) // 크롭할 이미지
   const fileRef = useRef<HTMLInputElement>(null)
 
   // 마네킹 미리보기용 hex 변환
@@ -87,10 +89,16 @@ export default function OotdRecord() {
     if (!file) return
     const reader = new FileReader()
     reader.onload = () => {
-      if (typeof reader.result === 'string') ootd.addPhoto(reader.result)
+      if (typeof reader.result === 'string') setCropSrc(reader.result) // 크롭 UI로
     }
     reader.readAsDataURL(file)
     e.target.value = ''
+  }
+
+  // 크롭 완료 콜백
+  const handleCropDone = (croppedDataUrl: string) => {
+    ootd.addPhoto(croppedDataUrl)
+    setCropSrc(null)
   }
 
   if (saved) {
@@ -216,6 +224,9 @@ export default function OotdRecord() {
           onCancel={() => setEditingPhotoIdx(null)}
         />
       )}
+
+      {/* 4:5 크롭 UI */}
+      {cropSrc && <CropOverlay src={cropSrc} ratio={4/5} onDone={handleCropDone} onCancel={() => setCropSrc(null)} />}
 
       {/* 상황 */}
       <Section icon={<Tag size={13} />} label="상황">
@@ -385,3 +396,5 @@ function Section({ icon, label, badge, badgeColor, extra, children }: {
     </div>
   )
 }
+
+// CropOverlay → @/components/ui/CropOverlay 으로 분리됨

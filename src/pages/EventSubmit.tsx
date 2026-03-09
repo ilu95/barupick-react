@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Camera, Check, AlertTriangle } from 'lucide-react'
 import MannequinSVG from '@/components/mannequin/MannequinSVG'
+import CropOverlay from '@/components/ui/CropOverlay'
 import ColorPicker from '@/components/ui/ColorPicker'
 import { COLORS_60 } from '@/lib/colors'
 import { STYLE_GUIDE } from '@/lib/styles'
@@ -25,6 +26,7 @@ export default function EventSubmit() {
   const [openPicker, setOpenPicker] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
+  const [cropSrc, setCropSrc] = useState<string | null>(null)
 
   useEffect(() => {
     if (!eventId) return
@@ -42,7 +44,7 @@ export default function EventSubmit() {
     const file = e.target.files?.[0]
     if (!file || photos.length >= 2) return
     const reader = new FileReader()
-    reader.onload = () => { if (typeof reader.result === 'string') setPhotos(prev => [...prev, reader.result as string]) }
+    reader.onload = () => { if (typeof reader.result === 'string') setCropSrc(reader.result) }
     reader.readAsDataURL(file)
     e.target.value = ''
   }
@@ -229,6 +231,9 @@ export default function EventSubmit() {
           {!instagramId.trim() ? '인스타 ID 필수' : ''}
         </div>
       )}
+
+      {/* 4:5 크롭 UI */}
+      {cropSrc && <CropOverlay src={cropSrc} ratio={4/5} onDone={(url) => { setPhotos(prev => [...prev, url]); setCropSrc(null) }} onCancel={() => setCropSrc(null)} />}
     </div>
   )
 }

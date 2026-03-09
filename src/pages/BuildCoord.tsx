@@ -8,6 +8,7 @@ import { COLORS_60 } from '@/lib/colors'
 import { MOOD_GROUPS, STYLE_GUIDE, STYLE_ICONS } from '@/lib/styles'
 import { CATEGORY_NAMES, FABRIC_ITEMS, FABRIC_SEASONS, FABRIC_COMPAT_RULES, getFabricCompat, evaluateFabricCombo } from '@/lib/categories'
 import { useBuild, type BuildStep } from '@/hooks/useBuild'
+import { profile } from '@/lib/profile'
 
 export default function BuildCoord() {
   const navigate = useNavigate()
@@ -256,14 +257,26 @@ function StepColor({ build }: { build: BH }) {
         {(CATEGORY_NAMES as any)?.[item] || item} 색상 선택
       </h2>
 
-      {/* 추천 색상 + 점수 변화 */}
+      {/* 퍼스널컬러·체형 맞춤 토글 */}
+      {profile.hasFitSettings() && (
+        <div className="flex items-center justify-between bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-xl px-3 py-2 mb-3 shadow-warm-sm">
+          <div className="text-xs text-warm-700 dark:text-warm-300 font-medium">🎨👤 퍼스널컬러·체형 맞춤</div>
+          <button onClick={() => { const next = !profile.getFitMode(); profile.setFitMode(next) }}
+            className={`w-10 h-6 rounded-full p-0.5 transition-colors ${profile.getFitMode() ? 'bg-terra-500' : 'bg-warm-400'}`}>
+            <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${profile.getFitMode() ? 'translate-x-4' : ''}`} />
+          </button>
+        </div>
+      )}
+
+      {/* 추천 색상 + 점수 변화 + 뱃지 */}
       {recs.length > 0 && (
         <div className="mb-4">
           <div className="text-xs font-semibold text-warm-600 dark:text-warm-400 tracking-wide mb-2 flex items-center gap-1">
             <Sparkles size={12} className="text-terra-500" /> 추천 색상
+            {recs[0]?.reason && <span className="text-[10px] text-warm-500 font-normal ml-1">{recs[0].reason}</span>}
           </div>
           <div className="flex gap-2 flex-wrap">
-            {recs.slice(0, 10).map(r => {
+            {recs.slice(0, 12).map(r => {
               const c = COLORS_60[r.key]
               if (!c) return null
               const sel = currentColor === r.key
@@ -276,8 +289,14 @@ function StepColor({ build }: { build: BH }) {
                       sel ? 'border-terra-500 ring-2 ring-terra-300 scale-110' : 'border-warm-400'
                     }`}
                     style={{ background: c.hex }}
-                    title={c.name}
+                    title={`${c.name} (${r.score}점) ${r.reason || ''}`}
                   />
+                  {/* PC/체형 뱃지 */}
+                  {(r.badges?.pc || r.badges?.body) && (
+                    <span className="absolute -top-1.5 -left-1.5 text-[8px] leading-none">
+                      {r.badges.pc && '🎨'}{r.badges.body && '👤'}
+                    </span>
+                  )}
                   {showDelta && delta !== 0 && (
                     <span className={`absolute -top-2 -right-2 text-[9px] font-bold px-1 py-0.5 rounded-full ${
                       delta > 0 ? 'bg-green-500 text-white' : 'bg-red-400 text-white'
@@ -565,6 +584,8 @@ function FabricCompatSection({ pairs, badCount, greatCount }: { pairs: any[]; ba
 // Step 6: 결과
 // ═══════════════════════════════════════
 function StepResult({ build, navigate }: { build: BH, navigate: any }) {
+  const [saveModal, setSaveModal] = useState(false)
+  const [saveName, setSaveName] = useState('')
   const score = build.getScore()
   const evalResult = build.getEvalResult()
   const circumference = 2 * Math.PI * 52
@@ -681,12 +702,7 @@ function StepResult({ build, navigate }: { build: BH, navigate: any }) {
 
       {/* 액션 */}
       <div className="flex flex-col gap-2.5 mb-5">
-        <button onClick={() => {
-            const outfit = {}; Object.entries(build.state.colors).forEach(([k,v]) => { if(v) outfit[k]=v })
-            const saved = JSON.parse(localStorage.getItem('cs_saved') || '[]')
-            saved.unshift({ id: Date.now().toString(36), outfit, score: build.getScore(), name: build.state.style || '코디', createdAt: Date.now() })
-            localStorage.setItem('cs_saved', JSON.stringify(saved)); alert('저장했어요!')
-          }} className="w-full py-3.5 bg-terra-500 text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-terra">
+        <button onClick={() => { setSaveName(build.state.style || '코디'); setSaveModal(true) }} className="w-full py-3.5 bg-terra-500 text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-terra">
           <Bookmark size={18} /> 이 코디 저장하기
         </button>
         <button onClick={() => { navigator.share?.({ title: "바루픽 코디", text: "코디 점수: " + build.getScore() + "점", url: "https://barupick-react.vercel.app" }).catch(() => {}) }} className="w-full py-3 bg-white border border-warm-400 text-warm-800 rounded-2xl font-medium text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
@@ -696,6 +712,30 @@ function StepResult({ build, navigate }: { build: BH, navigate: any }) {
           <Users size={16} /> 커뮤니티에 공유
         </button>
       </div>
+
+      {/* 저장 모달 */}
+      {saveModal && (
+        <div className="fixed inset-0 z-[300] bg-black/50 flex items-center justify-center px-8" onClick={() => setSaveModal(false)}>
+          <div className="bg-white dark:bg-warm-800 rounded-2xl p-5 w-full max-w-sm shadow-warm-lg" onClick={e => e.stopPropagation()}>
+            <div className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-3">코디 저장</div>
+            <input type="text" value={saveName} onChange={e => setSaveName(e.target.value)} maxLength={30} autoFocus
+              placeholder="코디 이름을 입력하세요"
+              className="w-full px-4 py-3 bg-warm-100 dark:bg-warm-700 border border-warm-400 dark:border-warm-600 rounded-xl text-sm text-warm-900 dark:text-warm-100 placeholder-warm-500 focus:outline-none focus:border-terra-400 mb-4" />
+            <div className="flex gap-2">
+              <button onClick={() => setSaveModal(false)} className="flex-1 py-2.5 bg-warm-200 dark:bg-warm-700 text-warm-700 dark:text-warm-300 rounded-xl text-sm font-medium active:scale-[0.98]">취소</button>
+              <button onClick={() => {
+                const name = saveName.trim() || build.state.style || '코디'
+                const outfit = {}; Object.entries(build.state.colors).forEach(([k,v]) => { if(v) outfit[k]=v })
+                const saved = JSON.parse(localStorage.getItem('cs_saved') || '[]')
+                saved.unshift({ id: Date.now().toString(36), outfit, score: build.getScore(), name, createdAt: Date.now() })
+                if (saved.length > 100) saved.length = 100
+                localStorage.setItem('cs_saved', JSON.stringify(saved))
+                setSaveModal(false); setSaveName(''); alert('저장했어요!')
+              }} className="flex-1 py-2.5 bg-terra-500 text-white rounded-xl text-sm font-semibold active:scale-[0.98] shadow-terra">저장</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <button
         onClick={() => build.pushStep('improve')}

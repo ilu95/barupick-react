@@ -7,6 +7,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { usePWA } from '@/hooks/usePWA'
 import { useWeather, weatherEmoji, weatherText, getLayerAdvice } from '@/hooks/useWeather'
 
+import { profile as profileLib } from '@/lib/profile'
+
 export default function Home() {
   const navigate = useNavigate()
   const { profile } = useAuth()
@@ -120,14 +122,16 @@ export default function Home() {
         )}
       </div>
 
-      {/* 퍼스널컬러 미설정 배너 */}
-      <button onClick={() => navigate('/profile/personal-color')} className="w-full flex items-center gap-3 bg-terra-100 border border-terra-200 rounded-2xl px-4 py-3.5 mb-5 text-left active:scale-[0.98] transition-all">
-        <div className="w-10 h-10 rounded-xl bg-terra-200 flex items-center justify-center flex-shrink-0">
-          <Sparkles size={20} className="text-terra-600" />
-        </div>
-        <span className="text-sm text-terra-700 leading-snug flex-1">퍼스널컬러를 설정하면 더 정확한 추천을 받을 수 있어요</span>
-        <ChevronRight size={16} className="text-terra-600 flex-shrink-0" />
-      </button>
+      {/* 퍼스널컬러 미설정 배너 — 설정 완료 시 숨김 */}
+      {!profileLib.getPersonalColor() && (
+        <button onClick={() => navigate('/profile/personal-color')} className="w-full flex items-center gap-3 bg-terra-100 border border-terra-200 rounded-2xl px-4 py-3.5 mb-5 text-left active:scale-[0.98] transition-all">
+          <div className="w-10 h-10 rounded-xl bg-terra-200 flex items-center justify-center flex-shrink-0">
+            <Sparkles size={20} className="text-terra-600" />
+          </div>
+          <span className="text-sm text-terra-700 leading-snug flex-1">퍼스널컬러를 설정하면 더 정확한 추천을 받을 수 있어요</span>
+          <ChevronRight size={16} className="text-terra-600 flex-shrink-0" />
+        </button>
+      )}
 
       <div className="h-px bg-warm-400 mb-5" />
 

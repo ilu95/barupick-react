@@ -4,8 +4,11 @@ import { COLORS_60 } from '@/lib/colors'
 import { STYLE_GUIDE, MOOD_GROUPS, LAYER_LEVELS } from '@/lib/styles'
 import { STYLE_MOODS } from '@/lib/styleMoods'
 import { CATEGORY_NAMES } from '@/lib/categories'
+import { PERSONAL_COLOR_12 } from '@/lib/personalColor'
+import { BODY_GUIDE_DATA } from '@/lib/bodyType'
 import { profile } from '@/lib/profile'
 import { evaluationSystem } from '@/lib/evaluation'
+import { calculateHarmonyV6 } from '@/lib/recommend'
 
 // @ts-nocheck
 
@@ -191,31 +194,157 @@ export function useBuild(mode: BuildMode = 'coord') {
     }
   }, [state])
 
-  // ── 색상 추천 (간이) ──
-  const getColorRecommendations = useCallback((part: string): { key: string; score: number }[] => {
-    if (state.mode === 'evaluate' || !state.style) return []
+  // ── 색상 추천 (원본 getColorRecommendations 포팅) ──
+  const getColorRecommendations = useCallback((item: string): { key: string; score: number; reason: string; badges: { pc: boolean; body: boolean } }[] => {
+    if (state.mode === 'evaluate') return []
 
-    const moods = (STYLE_MOODS as any)[state.style]
-    if (!moods) return []
+    const DEPENDENCY_MAP: Record<string, string[]> = {
+      outer: ['top', 'middleware', 'bottom'],
+      middleware: ['top', 'bottom'],
+      top: ['bottom'],
+      bottom: ['top'],
+      scarf: ['top', 'middleware', 'outer'],
+      hat: ['top', 'outer'],
+      shoes: ['bottom'],
+    }
+    const FACE_NEAR = ['outer', 'middleware', 'top', 'scarf', 'hat']
+    const COMMON_WARDROBE: Record<string, number> = {
+      black: 20, white: 20, navy: 18, gray: 16, charcoal: 16, beige: 16,
+      cream: 14, ivory: 14, camel: 14, brown: 12, olive: 12, burgundy: 12,
+      khaki: 12, lightgray: 12, taupe: 10,
+    }
 
-    // 스타일의 첫 번째 무드에서 해당 파트의 색상 풀 가져오기
-    const moodKeys = Object.keys(moods)
-    const allColors: Record<string, number> = {}
+    const fitMode = profile.getFitMode()
+    const isFaceNear = FACE_NEAR.includes(item)
+    const pcType = (fitMode && isFaceNear) ? profile.getPersonalColor() : null
+    const pcData = pcType ? (PERSONAL_COLOR_12 as any)[pcType] : null
+    const bestColors: string[] = (pcData?.bestColors || []).filter((c: string) => COLORS_60[c])
+    const avoidColors: string[] = (pcData?.avoidColors || pcData?.worstColors || []).filter((c: string) => COLORS_60[c])
 
-    moodKeys.forEach(mk => {
-      const pool = moods[mk]?.[part]
-      if (Array.isArray(pool)) {
-        pool.forEach((ck: string) => {
-          allColors[ck] = (allColors[ck] || 0) + 1
+    const bt = fitMode ? profile.getBodyType() : null
+    const btData = bt ? (BODY_GUIDE_DATA as any)[bt] : null
+    const bodyRule = btData?.colorRules?.[item] || null
+
+    const checkBodyMatch = (rule: string | null, colorKey: string) => {
+      if (!rule || rule === 'any') return false
+      const c = COLORS_60[colorKey]
+      if (!c) return false
+      const lightness = c.hcl[2]
+      if (rule === 'light') return lightness >= 55
+      if (rule === 'dark') return lightness <= 45
+      if (rule === 'match-shoes') return state.colors.shoes ? colorKey === state.colors.shoes : false
+      if (rule === 'match-bottom') return state.colors.bottom ? colorKey === state.colors.bottom : false
+      return false
+    }
+
+    // 이미 선택된 관련 색상
+    const related = (DEPENDENCY_MAP[item] || []).filter(cat => state.colors[cat])
+    const baseColors = related.map(cat => state.colors[cat]!).filter(Boolean)
+
+    // ─── 첫 번째 부위 (baseColors 없음): PC + 체형 + 기본 아이템 ───
+    if (baseColors.length === 0) {
+      const recs: { key: string; score: number; reason: string; badges: { pc: boolean; body: boolean } }[] = []
+      const seen = new Set<string>()
+
+      // Phase 1: 퍼스널컬러 Best
+      if (isFaceNear && bestColors.length > 0) {
+        bestColors.forEach(k => {
+          const bm = checkBodyMatch(bodyRule, k)
+          recs.push({ key: k, score: 100 + (bm ? 15 : 0), reason: bm ? '퍼스널컬러 + 체형' : '퍼스널컬러', badges: { pc: true, body: bm } })
+          seen.add(k)
+        })
+      }
+
+      // Phase 2: 체형 보완 추천
+      if (fitMode && bodyRule && bodyRule !== 'any') {
+        Object.keys(COLORS_60).forEach(k => {
+          if (seen.has(k) || avoidColors.includes(k)) return
+          const bm = checkBodyMatch(bodyRule, k)
+          if (bm) {
+            recs.push({ key: k, score: 80 + (COMMON_WARDROBE[k] || 0), reason: '체형 보완', badges: { pc: false, body: true } })
+            seen.add(k)
+          }
+        })
+      }
+
+      // Phase 3: 스타일 기반 추천
+      if (state.style) {
+        const mood = (STYLE_MOODS as any)[state.style]
+        if (mood) {
+          const pools = [...(mood.darks || []), ...(mood.mids || []), ...(mood.lights || []), ...(mood.pastels || [])]
+          pools.forEach(k => {
+            if (seen.has(k) || avoidColors.includes(k) || !COLORS_60[k]) return
+            const bm = checkBodyMatch(bodyRule, k)
+            const pcm = isFaceNear && bestColors.includes(k)
+            recs.push({ key: k, score: 70 + (pcm ? 15 : 0) + (bm ? 10 : 0) + (COMMON_WARDROBE[k] || 0), reason: '스타일 추천', badges: { pc: pcm, body: bm } })
+            seen.add(k)
+          })
+        }
+      }
+
+      // Phase 4: 기본 아이템
+      Object.entries(COMMON_WARDROBE).forEach(([k, v]) => {
+        if (seen.has(k) || avoidColors.includes(k)) return
+        const bm = checkBodyMatch(bodyRule, k)
+        recs.push({ key: k, score: v + (bm ? 10 : 0), reason: '기본 아이템', badges: { pc: false, body: bm } })
+        seen.add(k)
+      })
+
+      return recs.sort((a, b) => b.score - a.score).slice(0, 20)
+    }
+
+    // ─── 2번째 이후 부위: 기존 색상과의 조화도 계산 ───
+    const recs: { key: string; score: number; reason: string; badges: { pc: boolean; body: boolean } }[] = []
+
+    Object.keys(COLORS_60).forEach(targetKey => {
+      if (baseColors.includes(targetKey)) return
+
+      // calculateHarmonyV6 호출
+      let totalScore = 0
+      baseColors.forEach(baseKey => {
+        try {
+          const h = calculateHarmonyV6(baseKey, targetKey)
+          totalScore += h.score
+        } catch { totalScore += 50 }
+      })
+      let avgScore = totalScore / baseColors.length
+
+      // 퍼스널컬러 보너스
+      let pcMatch = false
+      const bodyMatch = fitMode ? checkBodyMatch(bodyRule, targetKey) : false
+      if (pcType && isFaceNear) {
+        if (bestColors.includes(targetKey)) { pcMatch = true; avgScore += 20 }
+        else if (avoidColors.includes(targetKey)) avgScore -= 15
+      }
+
+      // 체형 보너스
+      if (bodyMatch) avgScore += (isFaceNear ? 4 : 15)
+
+      // 체형 반대 페널티
+      if (fitMode && bodyRule && bodyRule !== 'any' && !bodyMatch) {
+        const c = COLORS_60[targetKey]
+        if (c) {
+          const L = c.hcl[2]
+          const penalty = isFaceNear ? 3 : 8
+          if (bodyRule === 'light' && L < 35) avgScore -= penalty
+          if (bodyRule === 'dark' && L > 70) avgScore -= penalty
+        }
+      }
+
+      avgScore += COMMON_WARDROBE[targetKey] || 0
+
+      if (avgScore >= 45) {
+        recs.push({
+          key: targetKey,
+          score: Math.round(avgScore),
+          reason: pcMatch ? '퍼스널컬러' : bodyMatch ? '체형 보완' : '컬러 조화',
+          badges: { pc: pcMatch, body: bodyMatch },
         })
       }
     })
 
-    return Object.entries(allColors)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 15)
-      .map(([key, count]) => ({ key, score: Math.min(100, count * 20) }))
-  }, [state.style, state.mode])
+    return recs.sort((a, b) => b.score - a.score).slice(0, 20)
+  }, [state.style, state.mode, state.colors])
 
   // ── 결과에서 색상 개선 ──
   const editPart = useCallback((part: string) => {

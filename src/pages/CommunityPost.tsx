@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Image, Globe, Users, Lock, Camera, Check } from 'lucide-react'
 import MannequinSVG from '@/components/mannequin/MannequinSVG'
+import CropOverlay from '@/components/ui/CropOverlay'
 import { COLORS_60 } from '@/lib/colors'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -15,6 +16,7 @@ export default function CommunityPost() {
   const [showInstagram, setShowInstagram] = useState(false)
   const [posting, setPosting] = useState(false)
   const [done, setDone] = useState(false)
+  const [cropSrc, setCropSrc] = useState<string | null>(null)
 
   // 전달받은 outfit 데이터 (localStorage에서)
   const savedOutfit = (() => {
@@ -47,7 +49,7 @@ export default function CommunityPost() {
     if (!file || photos.length >= 4) return
     const reader = new FileReader()
     reader.onload = () => {
-      if (typeof reader.result === 'string') setPhotos(prev => [...prev, reader.result as string])
+      if (typeof reader.result === 'string') setCropSrc(reader.result)
     }
     reader.readAsDataURL(file)
     e.target.value = ''
@@ -198,6 +200,9 @@ export default function CommunityPost() {
       >
         {posting ? '공유 중...' : '🌐 커뮤니티에 공유하기'}
       </button>
+
+      {/* 4:5 크롭 UI */}
+      {cropSrc && <CropOverlay src={cropSrc} ratio={4/5} onDone={(url) => { setPhotos(prev => [...prev, url]); setCropSrc(null) }} onCancel={() => setCropSrc(null)} />}
     </div>
   )
 }

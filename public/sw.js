@@ -1,4 +1,4 @@
-const CACHE_NAME = 'barupick-v3';
+const CACHE_NAME = 'barupick-v9';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

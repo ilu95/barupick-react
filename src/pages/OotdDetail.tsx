@@ -131,13 +131,18 @@ export default function OotdDetail() {
             Object.entries(r.colors || {}).forEach(([k, v]) => {
               if (v) { const c = COLORS_60[v]; if (c) hex[k] = c.hex }
             })
+            const hasPhoto = r.photos && r.photos.length > 0
             return (
               <button
                 key={r.id}
                 onClick={() => navigate(`/closet/ootd/${date}?id=${r.id}`)}
                 className="flex items-center gap-3 bg-white border border-warm-400 rounded-2xl p-3 shadow-warm-sm active:scale-[0.98] transition-all text-left"
               >
-                <MannequinSVG outfit={hex} size={60} />
+                {hasPhoto ? (
+                  <img src={r.photos[0]} className="w-16 h-16 rounded-xl object-cover flex-shrink-0" alt="" />
+                ) : (
+                  <MannequinSVG outfit={hex} size={60} />
+                )}
                 <div className="flex-1">
                   <span className="font-display text-sm font-bold text-terra-600">{r.score}점</span>
                   {r.situation && <span className="text-[11px] text-warm-600 ml-2">{r.situation}</span>}
@@ -153,28 +158,25 @@ export default function OotdDetail() {
 
   return (
     <div className="animate-screen-fade px-5 pt-2 pb-10">
-      {/* 사진 갤러리 */}
+      {/* 사진 갤러리 — 사진이 메인 */}
       {record.photos && record.photos.length > 0 && (
-        <div className={`mb-4 -mx-5 px-5 ${record.photos.length === 1 ? '' : 'flex gap-2 overflow-x-auto pb-3 hide-scrollbar'}`}>
-          {record.photos.map((photo, idx) => (
-            <img
-              key={idx}
-              src={photo}
-              className={`rounded-2xl object-cover flex-shrink-0 ${
-                record.photos.length === 1
-                  ? 'w-full max-h-[70vh]'
-                  : 'w-[85vw] max-w-[400px] h-[60vh] max-h-[500px]'
-              }`}
-              alt={`코디 사진 ${idx + 1}`}
-            />
-          ))}
+        <div className="mb-4 -mx-5">
+          {record.photos.length === 1 ? (
+            <img src={record.photos[0]} className="w-full max-h-[75vh] object-cover" alt="코디 사진" />
+          ) : (
+            <div className="flex gap-1.5 overflow-x-auto pb-2 hide-scrollbar px-5">
+              {record.photos.map((photo, idx) => (
+                <img key={idx} src={photo} className="w-[80vw] max-w-[380px] aspect-[3/4] rounded-xl object-cover flex-shrink-0" alt={`코디 사진 ${idx + 1}`} />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {/* 마네킹 + 점수 */}
       <div className="flex items-center gap-5 mb-5">
         <div className="bg-warm-100 rounded-2xl p-4 flex-shrink-0">
-          <MannequinSVG outfit={outfitHex} size={120} />
+          <MannequinSVG outfit={outfitHex} size={record.photos?.length > 0 ? 80 : 120} />
         </div>
         <div className="flex-1">
           <div className="font-display text-3xl font-bold text-warm-900 mb-1">{record.score}<span className="text-lg text-warm-500">점</span></div>

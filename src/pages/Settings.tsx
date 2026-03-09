@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Moon, Eye, EyeOff, Cloud, MessageSquare, FileText, Shield, LogOut, UserX, Info, Check } from 'lucide-react'
+import { Moon, Eye, EyeOff, Cloud, MessageSquare, FileText, Shield, LogOut, UserX, Info, Check, Download } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { useAutoSync, useLastSyncTime } from '@/hooks/useAutoSync'
@@ -119,6 +119,30 @@ export default function Settings() {
               <div className="text-[11px] text-warm-500">수동으로 서버와 동기화합니다</div>
             </div>
             {syncing && <div className="w-4 h-4 border-2 border-terra-300 border-t-terra-500 rounded-full animate-spin" />}
+          </button>
+          <button
+            onClick={() => {
+              try {
+                const data = {
+                  records: JSON.parse(localStorage.getItem('sp_ootd_records') || '[]'),
+                  closet: JSON.parse(localStorage.getItem('sp_wardrobe') || '[]'),
+                  saved: JSON.parse(localStorage.getItem('cs_saved') || '[]'),
+                  profile: JSON.parse(localStorage.getItem('cs_profile') || '{}'),
+                  exportDate: new Date().toISOString(),
+                }
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a'); a.href = url; a.download = 'barupick_backup.json'; a.click()
+                URL.revokeObjectURL(url)
+              } catch (e: any) { alert('내보내기 실패: ' + e.message) }
+            }}
+            className="w-full flex items-center gap-2.5 py-3.5 border-b border-warm-300 text-left active:bg-warm-200/50 rounded-lg transition-colors"
+          >
+            <Download size={18} className="text-warm-600" />
+            <div className="flex-1">
+              <span className="text-[15px] text-warm-900">데이터 내보내기</span>
+              <div className="text-[11px] text-warm-500">OOTD 기록, 옷장, 저장한 코디를 JSON으로 다운로드</div>
+            </div>
           </button>
           <button
             onClick={() => setFeedbackOpen(true)}

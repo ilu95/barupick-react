@@ -5,7 +5,7 @@
 // ⚠️ 추천 결과가 기존과 동일하게 나와야 합니다.
 // ================================================================
 
-import { COLORS_60, COLORS, hcl, H, Cv, L, hex, temp, COLOR_FAMILIES, WARM_SET, COOL_SET, getHueDiff, isNeutralColor, getToneGroup, getColorTemperature, PASTEL_COLORS, EARTH_TONE_COLORS } from './colors'
+import { COLORS_60, COLORS, hcl, H, Cv, L, hex, temp, COLOR_FAMILIES, WARM_SET, COOL_SET, getHueDiff, isNeutralColor, getToneGroup, getColorTemperature, PASTEL_COLORS, EARTH_TONE_COLORS, CLASSIC_COMBOS, AVOID_COMBOS } from './colors'
 import { STYLE_MOODS } from './styleMoods'
 import { STYLE_GUIDE, LAYER_LEVELS } from './styles'
 import { PERSONAL_COLOR_12, FACE_NEAR_ITEMS } from './personalColor'
@@ -1235,36 +1235,7 @@ export const COMMON_WARDROBE_COLORS = {
 export const PURE_NEUTRAL_COLORS = ['black', 'white', 'gray', 'charcoal', 'lightgray'];
 
 // 클래식 조합 (패션에서 검증된 조합)
-export const CLASSIC_COMBOS = {
-    'navy': ['burgundy', 'wine', 'olive', 'brown', 'dark_olive', 'forest', 'red', 'maroon'],
-    'burgundy': ['navy', 'olive', 'dark_green', 'forest', 'brown', 'camel', 'dark_olive', 'pink', 'pastel_pink'],
-    'olive': ['burgundy', 'navy', 'brown', 'wine', 'dark_brown', 'khaki', 'taupe', 'camel'],
-    'brown': ['navy', 'burgundy', 'olive', 'dark_green', 'taupe', 'khaki'],
-    'wine': ['navy', 'olive', 'camel', 'brown', 'khaki', 'pastel_pink'],
-    'forest': ['burgundy', 'navy', 'brown', 'wine', 'camel'],
-    'dark_green': ['burgundy', 'brown', 'camel', 'navy', 'wine', 'khaki'],
-    'dark_olive': ['burgundy', 'navy', 'wine', 'camel'],
-    'red': ['navy', 'charcoal'],
-    'maroon': ['navy', 'camel', 'beige', 'khaki'],
-    'taupe': ['olive', 'burgundy', 'navy', 'brown', 'camel', 'khaki'],
-    'khaki': ['olive', 'burgundy', 'navy', 'brown', 'wine', 'taupe', 'dark_green', 'camel'],
-    'camel': ['olive', 'burgundy', 'navy', 'wine', 'forest', 'dark_green', 'dark_olive', 'khaki'],
-    'blue': ['purple', 'royal_blue', 'navy'],
-    'purple': ['blue', 'pink', 'magenta', 'burgundy'],
-};
-
-// 피해야 할 조합
-export const AVOID_COMBOS = {
-    'black': ['navy', 'dark_blue', 'midnight', 'charcoal'],
-    'navy': ['black', 'dark_blue', 'midnight', 'indigo'],
-    'charcoal': ['black'],
-    'red': ['orange', 'magenta', 'coral', 'pink', 'green', 'lime', 'emerald', 'forest', 'dark_green'],
-    'green': ['red', 'magenta', 'pink', 'dark_red', 'maroon'],
-    'dark_green': ['red', 'dark_red', 'maroon'],
-    'forest': ['red', 'dark_red', 'maroon'],
-    'burgundy': ['wine', 'maroon', 'dark_red'],
-    'brown': ['dark_brown', 'chocolate', 'espresso'],
-};
+// CLASSIC_COMBOS, AVOID_COMBOS → colors.ts로 이동됨 (evaluation.ts 공용)
 
 // 파스텔, 어스톤, 헬퍼함수는 colors.ts에서 import
 
