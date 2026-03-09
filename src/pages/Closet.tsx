@@ -197,6 +197,8 @@ function RecordCard({ record, navigate }: { record: OotdRecord, navigate: any })
           <span className="font-display text-[11px] font-bold text-terra-600 bg-terra-100 px-2 py-0.5 rounded-full">{record.score}점</span>
         </div>
         {record.situation && <div className="text-[11px] text-warm-600 mb-0.5">{record.situation}</div>}
+        {record.weather && <div className="text-[11px] text-warm-500">{record.weather}</div>}
+        {record.situation && <div className="text-[11px] text-warm-600 mb-0.5">{record.situation}</div>}
         {record.memo && <div className="text-[11px] text-warm-500 truncate">{record.memo}</div>}
 
         {/* 컬러 도트 */}

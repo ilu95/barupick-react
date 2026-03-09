@@ -109,3 +109,18 @@
 .color-chip .chip-label { font-size: 8px; font-weight: 600; text-align: center; line-height: 1.2; padding: 2px; }
 
 @media (max-width: 350px) { body { font-size: 13px; } .px-5 { padding-left: 1rem; padding-right: 1rem; } }
+
+/* Additional dark mode fixes (#17) */
+.dark .bg-gradient-to-r.from-purple-50 { background: linear-gradient(to right, #2D2238, #2D1F2F) !important; }
+.dark .border-purple-200 { border-color: #4C3D5C !important; }
+.dark .text-purple-50, .dark .from-purple-50 { color: #D8BFD8 !important; }
+.dark .bg-sky-50 { background: #1E2D3D !important; }
+.dark .border-sky-200 { border-color: #2A4A6B !important; }
+.dark .bg-green-50 { background: #1A2E1A !important; }
+.dark .border-green-200 { border-color: #2D5A2D !important; }
+.dark .bg-blue-50 { background: #1A2040 !important; }
+.dark .border-blue-200 { border-color: #2A3A6B !important; }
+.dark .bg-red-50 { background: #2E1A1A !important; }
+.dark .border-red-200 { border-color: #5A2D2D !important; }
+.dark .bg-amber-50 { background: #2E2A1A !important; }
+.dark .border-amber-200 { border-color: #5A4D2D !important; }

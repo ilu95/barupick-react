@@ -105,7 +105,7 @@ export function Quiz() {
             <div className="font-display text-lg font-bold text-terra-700">캐주얼 룩</div>
             <div className="text-sm text-warm-600 mt-1">편안하면서도 센스 있는 일상 코디</div>
           </div>
-          <button onClick={() => navigate('/home/recommend')} className="px-6 py-3 bg-terra-500 text-white rounded-2xl font-semibold text-sm active:scale-[0.98] transition-all shadow-terra">이 스타일로 추천받기</button>
+          <button onClick={() => navigate('/home/recommend?style=casual')} className="px-6 py-3 bg-terra-500 text-white rounded-2xl font-semibold text-sm active:scale-[0.98] transition-all shadow-terra">이 스타일로 추천받기</button>
         </div>
       )}
     </div>

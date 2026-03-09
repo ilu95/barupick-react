@@ -145,7 +145,7 @@ export default function OotdDetail() {
       {/* 액션 */}
       <div className="flex gap-2.5 mb-5">
         <button
-          onClick={() => navigate('/record')}
+          onClick={() => { const r = record; localStorage.setItem("_ootd_edit", JSON.stringify(r)); navigate("/record?edit=" + r.id) }}
           className="flex-1 py-3 bg-white border border-warm-400 rounded-2xl text-sm font-medium text-warm-800 flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all"
         >
           <Pencil size={14} /> 수정

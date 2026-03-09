@@ -590,13 +590,21 @@ function StepDetail({ rec, navigate }: { rec: RecHook, navigate: any }) {
 
       {/* 액션 버튼 */}
       <div className="flex flex-col gap-2.5 mb-5">
-        <button className="w-full py-3.5 bg-terra-500 text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-terra">
+        <button onClick={() => {
+            const combo = rec.state.results[rec.state.detailIdx]; if(!combo) return
+            const saved = JSON.parse(localStorage.getItem('cs_saved') || '[]')
+            saved.unshift({ id: Date.now().toString(36), outfit: combo.outfit, score: combo.score, name: combo.name, createdAt: Date.now() })
+            localStorage.setItem('cs_saved', JSON.stringify(saved)); alert('저장했어요!')
+          }} className="w-full py-3.5 bg-terra-500 text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-terra">
           <Bookmark size={18} /> 이 코디 저장하기
         </button>
-        <button className="w-full py-3 bg-white border border-warm-400 text-warm-800 rounded-2xl font-medium text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
+        <button onClick={() => { const combo = rec.state.results[rec.state.detailIdx]; navigator.share?.({ title: '바루픽 코디', text: combo?.name + ' ' + combo?.score + '점', url: 'https://barupick-react.vercel.app' }).catch(() => {}) }} className="w-full py-3 bg-white border border-warm-400 text-warm-800 rounded-2xl font-medium text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
           <Share size={16} /> 이 조합 공유하기
         </button>
-        <button className="w-full py-3 bg-warm-900 text-white rounded-2xl font-medium text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
+        <button onClick={() => {
+            const combo = rec.state.results[rec.state.detailIdx]; if(!combo) return
+            localStorage.setItem('_pending_post_outfit', JSON.stringify(combo.outfit)); window.location.href = '/community/post'
+          }} className="w-full py-3 bg-warm-900 text-white rounded-2xl font-medium text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
           <Users size={16} /> 커뮤니티에 공유
         </button>
       </div>

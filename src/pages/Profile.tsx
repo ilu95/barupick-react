@@ -146,7 +146,7 @@ export default function Profile() {
           <div className="flex-1">
             {authProfile?.instagram_id ? (
               <>
-                <div className="text-sm font-medium text-warm-900">@{authProfile.instagram_id}</div>
+                <div className="text-sm font-medium text-warm-900 dark:text-white">@{authProfile.instagram_id}</div>
                 <div className="text-[10px] text-warm-500">탭하여 수정</div>
               </>
             ) : (

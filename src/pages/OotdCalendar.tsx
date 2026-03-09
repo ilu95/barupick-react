@@ -113,15 +113,18 @@ export default function OotdCalendar() {
 
               {hasRecords && bestRecord && (
                 <div className="flex gap-[2px] mt-0.5">
-                  {Object.values(bestRecord.colors).filter(Boolean).slice(0, 3).map((ck, i) => {
+                  {Object.values(bestRecord.colors).filter(Boolean).slice(0, 4).map((ck, i) => {
                     const c = COLORS_60[ck as string]
-                    return c ? <div key={i} className="w-[5px] h-[5px] rounded-full" style={{ background: c.hex }} /> : null
+                    return c ? <div key={i} className="w-[6px] h-[6px] rounded-full border border-white/50" style={{ background: c.hex }} /> : null
                   })}
                 </div>
               )}
+              {hasRecords && bestRecord && (
+                <div className="text-[7px] font-bold text-terra-600 mt-[1px]">{bestRecord.score}점</div>
+              )}
 
               {day.records.length > 1 && (
-                <span className="text-[8px] text-terra-500 font-bold">{day.records.length}</span>
+                <span className="text-[7px] text-warm-500">+{day.records.length - 1}</span>
               )}
             </button>
           )

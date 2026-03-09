@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Palette, Image, Tag, Smile, Eye, Calendar, Check, Camera, Lock, Users, Globe, X } from 'lucide-react'
 import MannequinSVG from '@/components/mannequin/MannequinSVG'
@@ -23,6 +23,18 @@ export default function OotdRecord() {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const ootd = useOotd()
+
+  // 편집 모드 로드 (#10)
+  useEffect(() => {
+    const editData = localStorage.getItem("_ootd_edit")
+    if (editData) {
+      try {
+        const rec = JSON.parse(editData)
+        ootd.startEdit(rec)
+        localStorage.removeItem("_ootd_edit")
+      } catch {}
+    }
+  }, [])
   const [saved, setSaved] = useState(false)
   const [customSit, setCustomSit] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -81,6 +93,15 @@ export default function OotdRecord() {
       {ootd.filledCount > 0 && (
         <div className="flex justify-center mb-3">
           <MannequinSVG outfit={outfitHex} size={90} />
+        </div>
+      )}
+
+      {/* 날씨 표시 */}
+      {ootd.weatherData && (
+        <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl text-sm">
+          <span>{ootd.weatherData.code !== undefined ? (ootd.weatherData.code === 0 ? '☀️' : ootd.weatherData.code <= 3 ? '⛅' : ootd.weatherData.code <= 67 ? '🌧️' : '❄️') : '🌤️'}</span>
+          <span className="text-warm-800 dark:text-warm-200">{ootd.weatherData.temp}°C</span>
+          <span className="text-warm-500 text-xs">체감 {ootd.weatherData.feels}°C</span>
         </div>
       )}
 

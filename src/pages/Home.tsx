@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { Wand2, Palette, CloudSun, Bookmark, Scissors, Ruler, HelpCircle, ChevronRight, Flame, Calendar, Sparkles, Download, X } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePWA } from '@/hooks/usePWA'
+import { useWeather, weatherEmoji, getLayerAdvice } from '@/hooks/useWeather'
 
 export default function Home() {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const { canInstall, install } = usePWA()
+  const { weather, loading: wLoading } = useWeather()
 
   // 온보딩 체크
   useEffect(() => {
@@ -31,7 +33,7 @@ export default function Home() {
         </h1>
         <div className="flex gap-2 flex-wrap">
           <button onClick={() => navigate('/home/weather')} className="inline-flex items-center gap-1.5 bg-white border border-warm-400 rounded-full px-3.5 py-2 text-sm text-warm-600 shadow-warm-sm active:scale-[0.97] transition-all">
-            <CloudSun size={16} /> 날씨 불러오는 중...
+            <CloudSun size={16} /> {weather ? `${weatherEmoji(weather.code)} ${weather.temp}°C · ${getLayerAdvice(weather.feels).desc}` : wLoading ? '날씨 불러오는 중...' : '위치 허용 필요'}
           </button>
           <button onClick={() => navigate('/record')} className="inline-flex items-center gap-1.5 bg-white border border-warm-400 rounded-full px-3.5 py-2 text-sm text-warm-600 shadow-warm-sm active:scale-[0.97] transition-all">
             <Calendar size={16} /> 오늘 첫 기록을 남겨보세요
