@@ -4,7 +4,7 @@
 // ================================================================
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { CloudSun, Thermometer, Droplets, Wind, HelpCircle, Scissors, Ruler, ShoppingBag, ExternalLink, Trophy, ChevronRight, Palette, ArrowRight, ArrowLeft, Check, ThumbsUp, ThumbsDown, Minus, CheckCircle, XCircle } from 'lucide-react'
+import { CloudSun, Thermometer, Droplets, Wind, HelpCircle, Scissors, Ruler, ShoppingBag, ExternalLink, Trophy, ChevronRight, Palette, ArrowRight, ArrowLeft, Check, ThumbsUp, ThumbsDown, Minus, CheckCircle, XCircle, Sparkles } from 'lucide-react'
 import MannequinSVG from '@/components/mannequin/MannequinSVG'
 import { COLORS_60 } from '@/lib/colors'
 import { STYLE_GUIDE, MOOD_GROUPS, LAYER_LEVELS, STYLE_ICONS } from '@/lib/styles'
@@ -667,22 +667,85 @@ export function BodyGuide() {
 
 // ─── 샵 ───
 export function Shop() {
+  const SHOP_INSTA_IMG = 'https://storage.googleapis.com/barupick-stocks/barusa_vintage.jpg'
+
   return (
     <div className="animate-screen-fade px-5 pt-2 pb-10">
-      <h2 className="font-display text-xl font-bold text-warm-900 tracking-tight mb-2">샵</h2>
-      <p className="text-sm text-warm-600 mb-5">바루사 빈티지 셀렉트샵</p>
-      <div className="bg-gradient-to-br from-terra-50 to-warm-100 border border-terra-200 rounded-2xl p-6 text-center mb-5">
-        <div className="text-3xl mb-3">👕</div>
-        <div className="font-display text-lg font-bold text-terra-700 mb-1">BARUSA</div>
-        <div className="text-sm text-warm-600 mb-4">프리미엄 빈티지 의류 셀렉트샵</div>
-        <div className="flex flex-col gap-2.5">
-          <a href="https://barusa.co.kr" target="_blank" rel="noopener" className="flex items-center justify-center gap-2 py-3 bg-terra-500 text-white rounded-2xl font-semibold text-sm active:scale-[0.98] transition-all shadow-terra">
-            <ShoppingBag size={16} /> 바루사 홈페이지 <ExternalLink size={14} />
-          </a>
-          <a href="https://instagram.com/barusa.magazine" target="_blank" rel="noopener" className="flex items-center justify-center gap-2 py-3 bg-white border border-warm-400 text-warm-800 rounded-2xl font-medium text-sm active:scale-[0.98] transition-all">
-            📸 @barusa.magazine <ExternalLink size={14} />
-          </a>
+
+      {/* 히어로 배너 */}
+      <div className="relative overflow-hidden rounded-3xl mb-5 bg-gradient-to-br from-warm-900 via-[#2D2926] to-[#1C1917] text-white p-7 pb-8">
+        <div className="absolute top-0 right-0 w-40 h-40 bg-terra-500 opacity-10 rounded-full -translate-y-12 translate-x-12" />
+        <div className="relative z-10">
+          <div className="font-display text-[10px] font-semibold tracking-[3px] uppercase text-terra-400 mb-3">Vintage Shop</div>
+          <div className="font-display text-3xl font-bold tracking-tight mb-1">BARUSA</div>
+          <div className="text-warm-500 text-sm">프레피 &amp; 올드머니 빈티지샵</div>
         </div>
+      </div>
+
+      {/* 추천 배지 */}
+      <div className="flex items-center gap-2 rounded-xl px-4 py-3 mb-5 text-sm font-medium bg-terra-100 border border-terra-200 text-terra-600">
+        <Sparkles size={16} className="flex-shrink-0" />
+        <span>바루픽 개발자가 운영중인 빈티지샵</span>
+      </div>
+
+      {/* 인스타그램 프로필 이미지 */}
+      <div className="mb-5">
+        <button
+          onClick={() => window.open('https://www.instagram.com/barusa_vintage', '_blank')}
+          className="w-full text-left active:scale-[0.99] transition-all"
+        >
+          <div className="bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl overflow-hidden shadow-warm-sm">
+            {SHOP_INSTA_IMG ? (
+              <img
+                src={SHOP_INSTA_IMG}
+                alt="BARUSA Instagram"
+                className="w-full rounded-t-2xl"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 px-6 bg-gradient-to-b from-warm-200 to-warm-300 dark:from-warm-700 dark:to-warm-800">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#F58529] via-[#DD2A7B] to-[#8134AF] p-[2.5px] mb-3">
+                  <div className="w-full h-full rounded-full bg-warm-900 flex items-center justify-center text-white font-display font-bold text-2xl">B</div>
+                </div>
+                <div className="font-bold text-warm-900 dark:text-warm-100 mb-0.5">@barusa_vintage</div>
+                <div className="text-xs text-warm-600 dark:text-warm-400 mb-3">BARUSA · 프레피 & 올드머니 빈티지</div>
+                <div className="flex gap-6 text-center">
+                  <div><div className="font-bold text-sm text-warm-900 dark:text-warm-100">3,000+</div><div className="text-[10px] text-warm-500">게시물</div></div>
+                  <div><div className="font-bold text-sm text-warm-900 dark:text-warm-100">30K</div><div className="text-[10px] text-warm-500">팔로워</div></div>
+                </div>
+              </div>
+            )}
+            <div className="text-center py-2.5 text-xs text-warm-500 border-t border-warm-300 dark:border-warm-600 flex items-center justify-center gap-1">
+              📸 인스타그램에서 보기 →
+            </div>
+          </div>
+        </button>
+      </div>
+
+      {/* CTA 버튼 */}
+      <div className="flex flex-col gap-2.5 mb-6">
+        <button
+          onClick={() => window.open('https://barusa.co.kr', '_blank')}
+          className="w-full py-4 bg-warm-900 dark:bg-warm-100 text-white dark:text-warm-900 rounded-2xl font-semibold text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-warm"
+        >
+          <ExternalLink size={18} /> BARUSA 스토어 방문하기
+        </button>
+      </div>
+
+      {/* 입점 안내 */}
+      <div className="bg-warm-300 dark:bg-warm-700 rounded-2xl p-5 text-center">
+        <div className="flex items-center justify-center gap-1.5 font-semibold text-warm-900 dark:text-warm-100 text-sm mb-2">
+          <ShoppingBag size={16} /> 빈티지샵 입점 안내
+        </div>
+        <div className="text-xs text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
+          바루픽에 샵을 등록하고 싶으신가요?<br />입점 문의는 아래 버튼으로 연락주세요.
+        </div>
+        <button
+          onClick={() => window.open('https://forms.gle/placeholder', '_blank')}
+          className="px-5 py-2.5 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-full text-xs font-semibold text-warm-800 dark:text-warm-200 active:scale-95 transition-all"
+        >
+          입점 문의하기
+        </button>
       </div>
     </div>
   )
