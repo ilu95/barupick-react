@@ -73,10 +73,10 @@ export default function AppHeader() {
       {/* 프로필 */}
       <button
         onClick={() => navigate('/profile')}
-        className="w-9 h-9 rounded-full bg-terra-100 flex items-center justify-center shadow-warm-sm active:scale-90 transition-transform"
+        className="w-9 h-9 rounded-full bg-terra-100 flex items-center justify-center shadow-warm-sm active:scale-90 transition-transform overflow-hidden flex-shrink-0"
       >
         {profile?.avatar_url ? (
-          <img src={profile.avatar_url} className="w-full h-full rounded-full object-cover" alt="" />
+          <img src={profile.avatar_url} className="w-9 h-9 rounded-full object-cover" alt="" />
         ) : (
           <User size={18} strokeWidth={2} className="text-terra-600" />
         )}

@@ -63,28 +63,15 @@ export default function Profile() {
     setAvatarEditSrc(null)
     if (!user) return
     try {
-      // dataURL → Blob
       const resp = await fetch(croppedDataUrl)
       const blob = await resp.blob()
       const path = `${user.id}/avatar_${Date.now()}.webp`
       const { error: uploadErr } = await supabase.storage.from('avatars').upload(path, blob, { upsert: true, contentType: 'image/webp' })
-
-      if (uploadErr) {
-        // Storage RLS 미설정 시 폴백: dataURL을 직접 프로필에 저장
-        console.warn('Storage upload failed, using dataURL fallback:', uploadErr.message)
-        await updateProfile({ avatar_url: croppedDataUrl })
-        return
-      }
-
+      if (uploadErr) throw uploadErr
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
       await updateProfile({ avatar_url: urlData.publicUrl + '?t=' + Date.now() })
     } catch (err: any) {
-      // 최종 폴백: dataURL 직접 저장
-      try {
-        await updateProfile({ avatar_url: croppedDataUrl })
-      } catch {
-        alert('아바타 변경 실패: ' + (err.message || ''))
-      }
+      alert('아바타 변경 실패: ' + (err.message || '') + '\n\nStorage RLS 정책을 확인해주세요.')
     }
   }
 
@@ -116,7 +103,7 @@ export default function Profile() {
 
       {/* 프로필 헤더 */}
       <div className="flex items-center gap-4 pb-3">
-        <div className="relative flex-shrink-0" onClick={user ? handleAvatarChange : undefined}>
+        <div className="relative flex-shrink-0 overflow-hidden" onClick={user ? handleAvatarChange : undefined}>
           {avatarUrl ? (
             <img src={avatarUrl} className="w-16 h-16 rounded-full object-cover border-[2.5px] border-terra-200" alt="" />
           ) : (

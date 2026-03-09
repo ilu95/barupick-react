@@ -105,13 +105,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateProfile = async (data: Partial<Profile>) => {
     if (!user) return
-    // upsert 방식: 프로필이 없으면 생성, 있으면 업데이트
-    const { error } = await supabase.from('profiles').upsert(
-      { id: user.id, ...data, updated_at: new Date().toISOString() },
-      { onConflict: 'id' }
-    )
+    const { error } = await supabase.from('profiles').update({ ...data, updated_at: new Date().toISOString() }).eq('id', user.id)
     if (error) throw error
-    setProfile(prev => prev ? { ...prev, ...data } : { id: user.id, ...data } as any)
+    setProfile(prev => prev ? { ...prev, ...data } : null)
   }
 
   return (
