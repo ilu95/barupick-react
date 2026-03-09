@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#F7F5F2" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="바루픽" />
+    <meta name="description" content="AI 컬러 코디 추천 · 퍼스널컬러 진단 · 20가지 스타일 × 83컬러" />
+    <meta property="og:title" content="바루픽" />
+    <meta property="og:description" content="AI가 추천하는 나만의 컬러 조합" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <title>바루픽</title>
+    <script>
+      // 다크모드 FOUC 방지 (렌더링 전 적용)
+      if (localStorage.getItem('sp_dark_mode') === '1') {
+        document.documentElement.classList.add('dark');
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#1C1917');
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
