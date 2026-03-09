@@ -48,6 +48,8 @@ function FeedCardInner({ post, isLiked, onLike, showComments }: Props) {
     <div
       className="bg-white rounded-[14px] border border-warm-400 overflow-hidden cursor-pointer active:scale-[0.97] transition-transform shadow-warm-sm"
       onClick={() => navigate(`/community/${post.id}`)}
+      role="article"
+      aria-label={`${nick}의 코디${title ? ': ' + title : ''}`}
     >
       {/* 이미지/마네킹 영역 */}
       <div className="bg-warm-100 flex items-center justify-center" style={{ aspectRatio: '4/5' }}>
@@ -55,7 +57,7 @@ function FeedCardInner({ post, isLiked, onLike, showComments }: Props) {
           <img
             src={photoUrl!}
             loading="lazy"
-            className="w-full h-full object-contain"
+            className="w-full h-full object-cover"
             alt={title || '코디'}
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = 'none'
@@ -101,6 +103,7 @@ function FeedCardInner({ post, isLiked, onLike, showComments }: Props) {
               e.stopPropagation()
               onLike(post.id)
             }}
+            aria-label={isLiked ? '좋아요 취소' : '좋아요'}
             className="flex items-center gap-0.5 text-[11px] active:scale-110 transition-transform"
           >
             <Heart

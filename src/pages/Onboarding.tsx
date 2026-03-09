@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Palette, Users, Calendar, Sparkles, ChevronRight } from 'lucide-react'
 
@@ -33,9 +33,51 @@ const SLIDES = [
   },
 ]
 
+const SWIPE_THRESHOLD = 50 // px
+
 export default function Onboarding() {
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
+  const [direction, setDirection] = useState<'left' | 'right' | null>(null)
+
+  // 스와이프 제스처
+  const touchRef = useRef({ startX: 0, startY: 0, swiping: false })
+
+  const goTo = useCallback((next: number, dir: 'left' | 'right') => {
+    if (next < 0 || next >= SLIDES.length) return
+    setDirection(dir)
+    // 짧은 딜레이 후 step 변경 (CSS transition 트리거용)
+    setTimeout(() => {
+      setStep(next)
+      setDirection(null)
+    }, 150)
+  }, [])
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchRef.current = {
+      startX: e.touches[0].clientX,
+      startY: e.touches[0].clientY,
+      swiping: true,
+    }
+  }, [])
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!touchRef.current.swiping) return
+    const dx = e.changedTouches[0].clientX - touchRef.current.startX
+    const dy = e.changedTouches[0].clientY - touchRef.current.startY
+    touchRef.current.swiping = false
+
+    // 수평 스와이프만 처리 (수직보다 수평이 클 때)
+    if (Math.abs(dx) < SWIPE_THRESHOLD || Math.abs(dy) > Math.abs(dx)) return
+
+    if (dx < 0 && step < SLIDES.length - 1) {
+      // 왼쪽 스와이프 → 다음
+      goTo(step + 1, 'left')
+    } else if (dx > 0 && step > 0) {
+      // 오른쪽 스와이프 → 이전
+      goTo(step - 1, 'right')
+    }
+  }, [step, goTo])
 
   const finish = () => {
     localStorage.setItem('sp_onboarded', '1')
@@ -45,12 +87,26 @@ export default function Onboarding() {
   const slide = SLIDES[step]
   const isLast = step === SLIDES.length - 1
 
+  // 슬라이드 전환 애니메이션 클래스
+  const slideAnim = direction === 'left'
+    ? 'opacity-0 -translate-x-8'
+    : direction === 'right'
+    ? 'opacity-0 translate-x-8'
+    : 'opacity-100 translate-x-0'
+
   return (
-    <div className="fixed inset-0 bg-[#F7F5F2] z-[500] flex flex-col">
+    <div
+      className="fixed inset-0 bg-[#F7F5F2] z-[500] flex flex-col"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       <div className="flex-1 flex flex-col items-center justify-center px-8 max-w-[480px] mx-auto w-full">
 
         {/* 슬라이드 컨텐츠 */}
-        <div className={`w-full bg-gradient-to-b ${slide.bg} rounded-3xl p-8 mb-8 text-center`}>
+        <div
+          className={`w-full bg-gradient-to-b ${slide.bg} rounded-3xl p-8 mb-8 text-center transition-all duration-200 ease-out ${slideAnim}`}
+          aria-live="polite"
+        >
           <div className="text-6xl mb-5">{slide.emoji}</div>
           <div className="w-14 h-14 rounded-2xl bg-white/80 flex items-center justify-center mx-auto mb-5 shadow-warm-sm">
             {slide.icon}
@@ -64,10 +120,14 @@ export default function Onboarding() {
         </div>
 
         {/* 도트 인디케이터 */}
-        <div className="flex gap-2 mb-8">
+        <div className="flex gap-2 mb-8" role="tablist" aria-label="온보딩 단계">
           {SLIDES.map((_, i) => (
-            <div
+            <button
               key={i}
+              role="tab"
+              aria-selected={i === step}
+              aria-label={`${i + 1}단계`}
+              onClick={() => goTo(i, i > step ? 'left' : 'right')}
               className={`h-2 rounded-full transition-all duration-300 ${
                 i === step ? 'w-6 bg-terra-500' : 'w-2 bg-warm-400'
               }`}
@@ -94,7 +154,7 @@ export default function Onboarding() {
               건너뛰기
             </button>
             <button
-              onClick={() => setStep(step + 1)}
+              onClick={() => goTo(step + 1, 'left')}
               className="flex-1 py-4 bg-terra-500 text-white rounded-2xl font-bold text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-terra"
             >
               다음 <ChevronRight size={18} />

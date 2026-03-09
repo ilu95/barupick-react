@@ -30,7 +30,7 @@ export default function ColorPicker({ selected, onSelect, onClear, onClose, inli
           <button
             key={g.label}
             onClick={() => setTab(g.label)}
-            className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all ${
+            className={`px-3 py-2 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all ${
               tab === g.label ? 'bg-terra-500 text-white' : 'bg-warm-200 text-warm-600'
             }`}
           >
@@ -52,6 +52,7 @@ export default function ColorPicker({ selected, onSelect, onClear, onClose, inli
             <button
               key={k}
               onClick={() => onSelect(k)}
+              aria-label={c.name}
               className={`aspect-square rounded-xl flex items-center justify-center text-[8px] font-semibold leading-tight transition-all active:scale-90 ${
                 isSelected ? 'ring-2 ring-terra-500 ring-offset-1 scale-105' : ''
               }`}
@@ -73,16 +74,16 @@ export default function ColorPicker({ selected, onSelect, onClear, onClose, inli
 
   // 바텀시트 모드
   return (
-    <div className="fixed inset-0 bg-black/40 z-[300] flex items-end justify-center" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/40 z-[300] flex items-end justify-center" onClick={onClose} role="dialog" aria-modal="true" aria-label="색상 선택">
       <div className="w-full max-w-[480px] bg-white rounded-t-3xl p-5 pb-8 animate-screen-enter" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-display text-lg font-bold text-warm-900">색상 선택</h3>
           <div className="flex gap-2">
             {selected && onClear && (
-              <button onClick={onClear} className="text-xs text-warm-600 active:opacity-70">초기화</button>
+              <button onClick={onClear} className="text-xs text-warm-600 active:opacity-70 py-1">초기화</button>
             )}
             {onClose && (
-              <button onClick={onClose} className="w-8 h-8 rounded-full bg-warm-200 flex items-center justify-center active:scale-90">
+              <button onClick={onClose} aria-label="닫기" className="w-9 h-9 rounded-full bg-warm-200 flex items-center justify-center active:scale-90">
                 <X size={16} />
               </button>
             )}

@@ -1,7 +1,9 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Calendar, Star, ChevronLeft, ChevronRight, Shirt, Trash2, Wand2 } from 'lucide-react'
 import MannequinSVG from '@/components/mannequin/MannequinSVG'
+import { useModal } from '@/components/ui/Modal'
+import { useToast } from '@/components/ui/Toast'
 import { COLORS_60 } from '@/lib/colors'
 import { useOotd, type OotdRecord } from '@/hooks/useOotd'
 
@@ -43,21 +45,53 @@ export default function Closet() {
 // 내 옷장 탭
 // ═══════════════════════════════════════
 function WardrobeTab({ navigate }: { navigate: any }) {
+  const modal = useModal()
+  const toast = useToast()
   const [items, setItems] = useState(() => {
     try { return JSON.parse(localStorage.getItem('sp_wardrobe') || '[]') } catch { return [] }
   })
   const [filter, setFilter] = useState<string>('all')
+  const undoRef = useRef<{ id: string; item: any; timer: ReturnType<typeof setTimeout> } | null>(null)
 
   const getColor = (item: any) => item.color || item.colorKey || null
   const catOrder = ['outer', 'middleware', 'top', 'bottom', 'scarf', 'hat', 'shoes']
   const catNames: Record<string, string> = { outer: '아우터', middleware: '미들웨어', top: '상의', bottom: '하의', scarf: '목도리', hat: '모자', shoes: '신발' }
   const getCatKey = (item: any) => catOrder.includes(item.category) ? item.category : 'etc'
 
+  // localStorage 저장 헬퍼
+  const persist = useCallback((nextItems: any[]) => {
+    localStorage.setItem('sp_wardrobe', JSON.stringify(nextItems))
+  }, [])
+
   const handleDelete = (id: string) => {
-    if (!confirm('이 아이템을 삭제할까요?')) return
-    const next = items.filter((i: any) => i.id !== id)
-    setItems(next)
-    localStorage.setItem('sp_wardrobe', JSON.stringify(next))
+    const target = items.find((i: any) => i.id === id)
+    if (!target) return
+    const displayName = target.name || COLORS_60[getColor(target)]?.name || '아이템'
+
+    modal.confirm({
+      title: '아이템 삭제',
+      message: `"${displayName}"을(를) 삭제할까요?`,
+      confirmLabel: '삭제',
+      variant: 'danger',
+      onConfirm: () => {
+        // 즉시 UI에서 제거
+        const next = items.filter((i: any) => i.id !== id)
+        setItems(next)
+        persist(next)
+
+        // 되돌리기 토스트 (5초)
+        toast.toast({
+          message: `"${displayName}" 삭제됨`,
+          undoAction: () => {
+            // 복원: 원래 위치에 다시 삽입
+            const current = JSON.parse(localStorage.getItem('sp_wardrobe') || '[]')
+            current.push(target)
+            localStorage.setItem('sp_wardrobe', JSON.stringify(current))
+            setItems(current)
+          },
+        })
+      },
+    })
   }
 
   const hasTop = items.some((i: any) => i.category === 'top')

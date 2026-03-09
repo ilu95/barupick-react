@@ -1,6 +1,8 @@
 import { Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { ToastProvider } from '@/components/ui/Toast'
+import { ModalProvider } from '@/components/ui/Modal'
 import BottomNav from '@/components/layout/BottomNav'
 import AppHeader from '@/components/layout/AppHeader'
 
@@ -54,6 +56,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <ToastProvider>
+        <ModalProvider>
         <AutoSyncProvider>
         <AppHeader />
         <Suspense fallback={<PageLoading />}>
@@ -118,6 +122,8 @@ export default function App() {
         </Suspense>
         <BottomNav />
         </AutoSyncProvider>
+        </ModalProvider>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   )

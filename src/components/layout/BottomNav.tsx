@@ -10,7 +10,18 @@ const TABS = [
 ]
 
 // 네비 숨김 화면
-const HIDDEN_ROUTES = ['/onboarding', '/auth', '/pc-light']
+// - 시스템: 온보딩, 인증, 퍼스널컬러 진단
+// - 작업 집중: 코디 만들기/추천, OOTD 기록, 글쓰기, 옷장 코디
+const HIDDEN_ROUTES = [
+  '/onboarding',
+  '/auth',
+  '/pc-light',
+  '/home/build',
+  '/home/recommend',
+  '/record',
+  '/community/post',
+  '/closet/coord',
+]
 
 export default function BottomNav() {
   const location = useLocation()
@@ -35,6 +46,7 @@ export default function BottomNav() {
 
   return (
     <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] bg-white/92 dark:bg-[#1C1917]/95 backdrop-blur-[20px] border-t border-warm-400/60 dark:border-[#44403C]/60 flex items-center justify-around z-[200] px-1"
+      aria-label="메인 내비게이션"
       style={{
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         height: 'calc(68px + env(safe-area-inset-bottom, 0px))',
@@ -49,6 +61,8 @@ export default function BottomNav() {
             <button
               key={tab.path}
               onClick={() => navigate(tab.path)}
+              aria-label={tab.label}
+              aria-current={isActive ? 'page' : undefined}
               className="flex flex-col items-center justify-center flex-1 h-full gap-[3px] relative"
             >
               <div className="w-[46px] h-[46px] rounded-full bg-terra-500 flex items-center justify-center -mt-5 shadow-terra transition-transform active:scale-[0.92]">
@@ -63,6 +77,8 @@ export default function BottomNav() {
           <button
             key={tab.path}
             onClick={() => navigate(tab.path)}
+            aria-label={tab.label}
+            aria-current={isActive ? 'page' : undefined}
             className={`flex flex-col items-center justify-center flex-1 h-full gap-[3px] transition-all ${
               isActive ? 'text-terra-500' : 'text-warm-600'
             }`}

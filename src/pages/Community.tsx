@@ -1,6 +1,6 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search } from 'lucide-react'
+import { Search, Plus, SlidersHorizontal } from 'lucide-react'
 import FeedCard from '@/components/community/FeedCard'
 import { useCommunity, type CommTab, type SortMode, type ContentFilter, type FriendsMode, type RankingMode } from '@/hooks/useCommunity'
 import { STYLE_GUIDE } from '@/lib/styles'
@@ -111,12 +111,24 @@ export default function Community() {
       {!comm.hasMore && comm.posts.length > 0 && !comm.loading && (
         <div className="text-center py-3 text-warm-500 text-xs mt-2">모든 코디를 불러왔어요</div>
       )}
+
+      {/* FAB — 글쓰기 */}
+      {user && (
+        <button
+          onClick={() => navigate('/community/post')}
+          aria-label="코디 공유하기"
+          className="fixed right-[max(20px,calc((100vw-480px)/2+20px))] bottom-[calc(80px+env(safe-area-inset-bottom,0px))] z-[180] w-14 h-14 rounded-full bg-terra-500 text-white flex items-center justify-center shadow-terra active:scale-90 transition-transform"
+        >
+          <Plus size={26} strokeWidth={2.5} />
+        </button>
+      )}
     </div>
   )
 }
 
 // ─── 전체 탭 필터 ───
 function AllTabFilters({ comm }: { comm: ReturnType<typeof useCommunity> }) {
+  const [showStyles, setShowStyles] = useState(false)
   const sorts: [SortMode, string][] = [['latest', '최신순'], ['popular', '인기순']]
   const cFilters: [ContentFilter, string][] = [['photo', '📷 사진'], ['mannequin', '👤 마네킹']]
   const styleChips: [string, string][] = [
@@ -124,55 +136,82 @@ function AllTabFilters({ comm }: { comm: ReturnType<typeof useCommunity> }) {
     ...Object.entries(STYLE_GUIDE).map(([k, v]) => [k, v.name.replace(/ 룩$/, '')] as [string, string])
   ]
 
+  const activeStyleLabel = comm.styleFilter
+    ? (STYLE_GUIDE[comm.styleFilter]?.name?.replace(/ 룩$/, '') || comm.styleFilter)
+    : null
+
   return (
     <>
-      {/* 정렬 */}
-      <div className="flex items-center gap-1.5 mb-2.5">
+      {/* 1줄: 정렬 + 콘텐츠 필터 + 스타일 토글 */}
+      <div className="flex items-center gap-1.5 mb-3 overflow-x-auto hide-scrollbar">
+        {/* 정렬 */}
         {sorts.map(([key, label]) => (
           <button
             key={key}
             onClick={() => comm.setSort(key)}
-            className={`px-3.5 py-1.5 rounded-full text-[11px] font-medium transition-all ${
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium transition-all ${
               comm.sort === key ? 'bg-warm-900 text-white' : 'bg-white border border-warm-400 text-warm-700 active:scale-95'
             }`}
           >
             {label}
           </button>
         ))}
-      </div>
 
-      {/* 콘텐츠 필터 */}
-      <div className="flex gap-1.5 mb-2.5">
+        {/* 구분선 */}
+        <div className="w-px h-4 bg-warm-400 flex-shrink-0" />
+
+        {/* 콘텐츠 필터 */}
         {cFilters.map(([key, label]) => (
           <button
             key={key}
             onClick={() => comm.setContentFilter(comm.contentFilter === key ? 'all' : key)}
-            className={`px-3 py-1.5 rounded-full text-[11px] font-medium transition-all ${
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium transition-all ${
               comm.contentFilter === key ? 'bg-terra-500 text-white' : 'bg-white border border-warm-400 text-warm-700 active:scale-95'
             }`}
           >
             {label}
           </button>
         ))}
+
+        {/* 구분선 */}
+        <div className="w-px h-4 bg-warm-400 flex-shrink-0" />
+
+        {/* 스타일 필터 토글 */}
+        <button
+          onClick={() => setShowStyles(!showStyles)}
+          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium transition-all flex items-center gap-1 ${
+            activeStyleLabel || showStyles
+              ? 'bg-warm-800 text-white'
+              : 'bg-white border border-warm-400 text-warm-700 active:scale-95'
+          }`}
+        >
+          <SlidersHorizontal size={11} />
+          {activeStyleLabel || '스타일'}
+        </button>
       </div>
 
-      {/* 스타일 필터 (가로 스크롤) */}
-      <div className="flex gap-1.5 overflow-x-auto pb-2 -mx-1 px-1 hide-scrollbar mb-4">
-        {styleChips.map(([key, label]) => {
-          const active = (key === 'all' && !comm.styleFilter) || comm.styleFilter === key
-          return (
-            <button
-              key={key}
-              onClick={() => comm.setStyleFilter(key === 'all' ? null : key)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium transition-all whitespace-nowrap ${
-                active ? 'bg-warm-800 text-white' : 'bg-warm-100 border border-warm-300 text-warm-600 active:scale-95'
-              }`}
-            >
-              {label}
-            </button>
-          )
-        })}
-      </div>
+      {/* 스타일 필터 확장 (토글 시) */}
+      {showStyles && (
+        <div className="flex gap-1.5 overflow-x-auto pb-2 -mx-1 px-1 hide-scrollbar mb-3 animate-screen-fade">
+          {styleChips.map(([key, label]) => {
+            const active = (key === 'all' && !comm.styleFilter) || comm.styleFilter === key
+            return (
+              <button
+                key={key}
+                onClick={() => {
+                  comm.setStyleFilter(key === 'all' ? null : key)
+                  if (key !== 'all') setShowStyles(false)
+                }}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium transition-all whitespace-nowrap ${
+                  active ? 'bg-warm-800 text-white' : 'bg-warm-100 border border-warm-300 text-warm-600 active:scale-95'
+                }`}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
+      )}
     </>
   )
 }

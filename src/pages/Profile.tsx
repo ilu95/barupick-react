@@ -3,6 +3,8 @@ import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BarChart3, Award, Palette, ScanLine, GraduationCap, Target, FileText, ShieldOff, SlidersHorizontal, Share, ChevronRight, Pencil, Camera, User, ScanFace, Trophy, Settings, LogOut, LogIn } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useModal } from '@/components/ui/Modal'
+import { useToast } from '@/components/ui/Toast'
 import { supabase } from '@/lib/supabase'
 import { gamification } from '@/lib/gamification'
 import { profile as profileLib } from '@/lib/profile'
@@ -13,6 +15,8 @@ import CropOverlay from '@/components/ui/CropOverlay'
 export default function Profile() {
   const navigate = useNavigate()
   const { user, profile: authProfile, logout, updateProfile } = useAuth()
+  const modal = useModal()
+  const toast = useToast()
   const [followerCount, setFollowerCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
   const [avatarEditSrc, setAvatarEditSrc] = useState<string | null>(null)
@@ -71,27 +75,44 @@ export default function Profile() {
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
       await updateProfile({ avatar_url: urlData.publicUrl + '?t=' + Date.now() })
     } catch (err: any) {
-      alert('아바타 변경 실패: ' + (err.message || '') + '\n\nStorage RLS 정책을 확인해주세요.')
+      toast.error('아바타 변경 실패: ' + (err.message || ''))
     }
   }
 
-  const handleEditField = async (field: 'nickname' | 'bio' | 'instagram_id') => {
+  const handleEditField = (field: 'nickname' | 'bio' | 'instagram_id') => {
     if (!user) return
-    const labels = { nickname: '닉네임', bio: '소개글', instagram_id: '인스타그램 ID' }
+
+    const labels: Record<string, string> = { nickname: '닉네임', bio: '소개글', instagram_id: '인스타그램 ID' }
+    const placeholders: Record<string, string> = { nickname: '2~12자 닉네임', bio: '나를 소개해보세요', instagram_id: '@없이 입력' }
+    const maxLengths: Record<string, number> = { nickname: 12, bio: 100, instagram_id: 30 }
     const current = (authProfile as any)?.[field] || ''
-    const value = prompt(`${labels[field]}을(를) 입력해주세요:`, current)
-    if (value === null) return
-    const clean = value.trim()
-    if (field === 'nickname') {
-      if (clean.length < 2 || clean.length > 12) { alert('닉네임은 2~12자여야 합니다'); return }
-      const forbidden = ['관리자', '운영자', 'admin', '바루픽', 'barupick', '바루사', 'barusa', '시스템', 'system', '테스트', 'test', '공지', 'notice']
-      if (forbidden.some(f => clean.toLowerCase().includes(f))) { alert('사용할 수 없는 닉네임입니다'); return }
+
+    const forbidden = ['관리자', '운영자', 'admin', '바루픽', 'barupick', '바루사', 'barusa', '시스템', 'system', '테스트', 'test', '공지', 'notice']
+
+    const validate = (value: string): string | null => {
+      if (field === 'nickname') {
+        if (value.length < 2) return '2자 이상 입력해주세요'
+        if (value.length > 12) return '12자 이하로 입력해주세요'
+        if (forbidden.some(f => value.toLowerCase().includes(f))) return '사용할 수 없는 닉네임입니다'
+      }
+      return null
     }
-    try {
-      await updateProfile({ [field]: clean || null })
-    } catch (err: any) {
-      alert('수정 실패: ' + (err.message || ''))
-    }
+
+    modal.prompt({
+      title: `${labels[field]} 수정`,
+      placeholder: placeholders[field],
+      defaultValue: current,
+      maxLength: maxLengths[field],
+      validate: field === 'nickname' ? validate : undefined,
+      onConfirm: async (value) => {
+        try {
+          await updateProfile({ [field]: value || null })
+          toast.success(`${labels[field]}을(를) 수정했어요`)
+        } catch (err: any) {
+          toast.error('수정 실패: ' + (err.message || ''))
+        }
+      },
+    })
   }
 
   const nickname = authProfile?.nickname || '스타일 입문자'

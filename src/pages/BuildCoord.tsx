@@ -1,21 +1,79 @@
 // @ts-nocheck
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, ArrowLeft, Bookmark, Share, Users, Palette, Scissors, ChevronRight, Sparkles, Check, ThumbsUp, ThumbsDown, Minus } from 'lucide-react'
+import { ArrowRight, ArrowLeft, Bookmark, Share, Users, Palette, Scissors, ChevronRight, Sparkles, Check, ThumbsUp, ThumbsDown, Minus, RefreshCw } from 'lucide-react'
 import MannequinSVG from '@/components/mannequin/MannequinSVG'
 import ColorPicker from '@/components/ui/ColorPicker'
+import { useToast } from '@/components/ui/Toast'
 import { COLORS_60 } from '@/lib/colors'
 import { MOOD_GROUPS, STYLE_GUIDE, STYLE_ICONS } from '@/lib/styles'
 import { CATEGORY_NAMES, FABRIC_ITEMS, FABRIC_SEASONS, FABRIC_COMPAT_RULES, getFabricCompat, evaluateFabricCombo } from '@/lib/categories'
 import { useBuild, type BuildStep } from '@/hooks/useBuild'
 import { profile } from '@/lib/profile'
 
+// ─── 스텝 인디케이터 ───
+const STEP_LABELS: Partial<Record<BuildStep, string>> = {
+  style: '스타일',
+  item: '부위',
+  garment: '형태',
+  color: '색상',
+  ask: '추가',
+  fabric: '소재',
+  result: '결과',
+  improve: '개선',
+}
+// 표시할 핵심 단계 순서 (ask는 중간 질문이라 표시하지 않음)
+const STEP_ORDER: BuildStep[] = ['style', 'item', 'color', 'result']
+
+function StepIndicator({ current, fabricMode }: { current: BuildStep; fabricMode: boolean }) {
+  // 실제 표시할 단계: fabric 모드면 '소재' 단계 추가
+  const steps = fabricMode
+    ? ['style', 'item', 'color', 'fabric', 'result'] as BuildStep[]
+    : STEP_ORDER
+
+  // garment/ask는 item/color의 하위 단계로 취급
+  const mappedCurrent = (current === 'garment' || current === 'ask') ? 'item'
+    : current === 'improve' ? 'result'
+    : current
+
+  const currentIdx = steps.indexOf(mappedCurrent as BuildStep)
+
+  return (
+    <div className="flex items-center gap-1.5 mb-4 px-1">
+      {steps.map((step, i) => {
+        const isActive = i === currentIdx
+        const isDone = i < currentIdx
+        return (
+          <div key={step} className="flex items-center gap-1.5 flex-1">
+            {/* 도트 + 라벨 */}
+            <div className="flex flex-col items-center gap-1 flex-1">
+              <div className={`h-1 w-full rounded-full transition-all duration-300 ${
+                isDone ? 'bg-terra-500' : isActive ? 'bg-terra-400' : 'bg-warm-400'
+              }`} />
+              <span className={`text-[10px] font-medium transition-colors ${
+                isActive ? 'text-terra-600 font-semibold' : isDone ? 'text-terra-500' : 'text-warm-500'
+              }`}>
+                {STEP_LABELS[step]}
+              </span>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function BuildCoord() {
   const navigate = useNavigate()
   const build = useBuild('coord')
 
   return (
-    <div className="animate-screen-fade px-5 pt-2 pb-10">
+    <div className="animate-screen-fade px-5 pt-2 pb-6">
+      {/* 스텝 인디케이터 — result/improve에서는 숨김 */}
+      {build.step !== 'result' && build.step !== 'improve' && (
+        <StepIndicator current={build.step} fabricMode={build.state.fabricMode} />
+      )}
+
       {build.step === 'style' && <StepStyle build={build} />}
       {build.step === 'item' && <StepItem build={build} />}
       {build.step === 'garment' && <StepGarment build={build} />}
@@ -74,6 +132,9 @@ function StepStyle({ build }: { build: BH }) {
         </div>
         <button
           onClick={() => build.update({ fabricMode: !build.state.fabricMode })}
+          role="switch"
+          aria-checked={build.state.fabricMode}
+          aria-label="소재도 함께 고르기"
           className={`w-12 h-7 rounded-full p-0.5 transition-colors ${build.state.fabricMode ? 'bg-terra-500' : 'bg-warm-400'}`}
         >
           <div className={`w-6 h-6 rounded-full bg-white shadow transition-transform ${build.state.fabricMode ? 'translate-x-5' : ''}`} />
@@ -232,11 +293,33 @@ function StepColor({ build }: { build: BH }) {
   // 점수 변화 미리보기용 — 이미 2색 이상 선택한 상태일 때만 표시
   const showDelta = filledCount >= 2
 
+  const handleNext = () => {
+    if (!currentColor) return
+    const queue = [...build.state.itemQueue]
+    queue.shift()
+    if (queue.length === 0) {
+      build.pushStep(build.state.fabricMode ? 'fabric' : 'result')
+    } else {
+      const next = queue[0]
+      const nextItem = typeof next === 'string' ? next : (next as any).item
+      build.update({ currentItem: nextItem, itemQueue: queue })
+      if (typeof next !== 'string') {
+        build.pushStep('ask')
+      } else if (nextItem === 'outer' || nextItem === 'middleware') {
+        build.pushStep('garment')
+      } else {
+        build.pushStep('color')
+      }
+    }
+  }
+
   return (
-    <div className="animate-screen-enter">
+    <div className="animate-screen-enter pb-[110px]">
       {/* 마네킹 토글 */}
       <button
         onClick={() => build.setVizCollapsed(!build.vizCollapsed)}
+        aria-expanded={!build.vizCollapsed}
+        aria-label="마네킹 미리보기"
         className="w-full text-center text-xs text-warm-600 py-2 mb-2 active:opacity-70"
       >
         {build.vizCollapsed ? '👤 마네킹 보기 ▼' : '👤 마네킹 접기 ▲'}
@@ -262,6 +345,9 @@ function StepColor({ build }: { build: BH }) {
         <div className="flex items-center justify-between bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-xl px-3 py-2 mb-3 shadow-warm-sm">
           <div className="text-xs text-warm-700 dark:text-warm-300 font-medium">🎨👤 퍼스널컬러·체형 맞춤</div>
           <button onClick={() => { const next = !profile.getFitMode(); profile.setFitMode(next) }}
+            role="switch"
+            aria-checked={profile.getFitMode()}
+            aria-label="퍼스널컬러·체형 맞춤"
             className={`w-10 h-6 rounded-full p-0.5 transition-colors ${profile.getFitMode() ? 'bg-terra-500' : 'bg-warm-400'}`}>
             <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${profile.getFitMode() ? 'translate-x-4' : ''}`} />
           </button>
@@ -285,7 +371,7 @@ function StepColor({ build }: { build: BH }) {
                 <div key={r.key} className="relative">
                   <button
                     onClick={() => build.selectColor(r.key)}
-                    className={`w-10 h-10 rounded-xl border-[1.5px] transition-all active:scale-90 ${
+                    className={`w-11 h-11 rounded-xl border-[1.5px] transition-all active:scale-90 ${
                       sel ? 'border-terra-500 ring-2 ring-terra-300 scale-110' : 'border-warm-400'
                     }`}
                     style={{ background: c.hex }}
@@ -322,59 +408,51 @@ function StepColor({ build }: { build: BH }) {
         />
       </div>
 
-      {/* 선택 확인 + 점수 변화 */}
-      {currentColor && (
-        <div className="flex items-center gap-3 bg-terra-50 dark:bg-terra-900/30 border border-terra-200 dark:border-terra-800 rounded-2xl p-3 mb-4">
-          <div className="w-10 h-10 rounded-xl border border-warm-400" style={{ background: COLORS_60[currentColor]?.hex }} />
-          <div className="flex-1">
-            <div className="text-sm font-semibold text-warm-900 dark:text-warm-100">{COLORS_60[currentColor]?.name}</div>
-            <div className="text-[11px] text-warm-600 dark:text-warm-400">{(CATEGORY_NAMES as any)?.[item]}</div>
-          </div>
-          {showDelta && (() => {
-            const delta = build.calcScoreDelta(item, currentColor)
-            if (delta === 0) return <Check size={18} className="text-terra-500" />
-            return (
-              <span className={`text-xs font-bold px-2 py-1 rounded-full ${
-                delta > 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
-              }`}>
-                {delta > 0 ? '+' : ''}{delta}점
-              </span>
-            )
-          })()}
-          {!showDelta && <Check size={18} className="text-terra-500" />}
-        </div>
-      )}
-
-      <button
-        onClick={() => {
-          if (!currentColor) return
-          // 현재 큐에서 다음으로
-          const queue = [...build.state.itemQueue]
-          queue.shift()
-          if (queue.length === 0) {
-            build.pushStep(build.state.fabricMode ? 'fabric' : 'result')
-          } else {
-            const next = queue[0]
-            const nextItem = typeof next === 'string' ? next : (next as any).item
-            build.update({ currentItem: nextItem, itemQueue: queue })
-            if (typeof next !== 'string') {
-              build.pushStep('ask')
-            } else if (nextItem === 'outer' || nextItem === 'middleware') {
-              build.pushStep('garment')
-            } else {
-              build.pushStep('color')
-            }
-          }
-        }}
-        disabled={!currentColor}
-        className={`w-full py-3.5 ${currentColor ? 'bg-terra-500 shadow-terra' : 'bg-warm-400'} text-white rounded-2xl font-semibold text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] transition-all`}
+      {/* ═══ 하단 고정 CTA 바 ═══ */}
+      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] bg-white/95 dark:bg-[#1C1917]/95 backdrop-blur-[20px] border-t border-warm-400/60 dark:border-warm-600/60 z-[190] px-5 py-3"
+        style={{ paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))' }}
       >
-        다음 <ArrowRight size={18} />
-      </button>
+        {/* 선택된 색상 미리보기 */}
+        {currentColor ? (
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-9 h-9 rounded-lg border border-warm-400" style={{ background: COLORS_60[currentColor]?.hex }} />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-warm-900 dark:text-warm-100">{COLORS_60[currentColor]?.name}</div>
+              <div className="text-[11px] text-warm-600 dark:text-warm-400">{(CATEGORY_NAMES as any)?.[item]}</div>
+            </div>
+            {showDelta && (() => {
+              const delta = build.calcScoreDelta(item, currentColor)
+              if (delta === 0) return <Check size={16} className="text-terra-500" />
+              return (
+                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                  delta > 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                }`}>
+                  {delta > 0 ? '+' : ''}{delta}점
+                </span>
+              )
+            })()}
+          </div>
+        ) : (
+          <div className="text-center text-[12px] text-warm-500 mb-3">색상을 선택해주세요</div>
+        )}
 
-      <button onClick={build.goBack} className="w-full py-2 text-sm text-warm-600 text-center mt-2 active:opacity-70">
-        이전으로
-      </button>
+        {/* 버튼 행 */}
+        <div className="flex gap-2">
+          <button
+            onClick={build.goBack}
+            className="px-5 py-3 bg-warm-200 dark:bg-warm-700 text-warm-700 dark:text-warm-300 rounded-2xl text-sm font-medium active:scale-[0.98] transition-all"
+          >
+            <ArrowLeft size={16} />
+          </button>
+          <button
+            onClick={handleNext}
+            disabled={!currentColor}
+            className={`flex-1 py-3 ${currentColor ? 'bg-terra-500 shadow-terra' : 'bg-warm-400'} text-white rounded-2xl font-semibold text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] transition-all`}
+          >
+            다음 <ArrowRight size={18} />
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -584,8 +662,7 @@ function FabricCompatSection({ pairs, badCount, greatCount }: { pairs: any[]; ba
 // Step 6: 결과
 // ═══════════════════════════════════════
 function StepResult({ build, navigate }: { build: BH, navigate: any }) {
-  const [saveModal, setSaveModal] = useState(false)
-  const [saveName, setSaveName] = useState('')
+  const toast = useToast()
   const score = build.getScore()
   const evalResult = build.getEvalResult()
   const circumference = 2 * Math.PI * 52
@@ -603,11 +680,45 @@ function StepResult({ build, navigate }: { build: BH, navigate: any }) {
     ...(evalResult.hasBodyFit ? [{ label: '체형 맞춤', value: evalResult.bodyFit, max: 8, desc: '체형별 컬러 배치' }] : []),
   ].filter(item => item.value > 0) : []
 
+  // 저장 핸들러
+  const handleSave = () => {
+    const name = build.state.style || '코디'
+    const outfit = {}; Object.entries(build.state.colors).forEach(([k,v]) => { if(v) outfit[k]=v })
+    const saved = JSON.parse(localStorage.getItem('cs_saved') || '[]')
+    saved.unshift({ id: Date.now().toString(36), outfit, score: build.getScore(), name, createdAt: Date.now() })
+    if (saved.length > 100) saved.length = 100
+    localStorage.setItem('cs_saved', JSON.stringify(saved))
+    toast.success('코디를 저장했어요!')
+  }
+
+  // 공유 핸들러
+  const handleShare = () => {
+    navigator.share?.({ title: "바루픽 코디", text: "코디 점수: " + score + "점", url: "https://barupick-react.vercel.app" }).catch(() => {})
+  }
+
+  // 커뮤니티 공유 핸들러
+  const handleCommunityShare = () => {
+    const outfit = {}; Object.entries(build.state.colors).forEach(([k,v]) => { if(v) outfit[k]=v })
+    localStorage.setItem("_pending_post_outfit", JSON.stringify(outfit))
+    navigate("/community/post")
+  }
+
+  // 점수 등급
+  const scoreGrade = score >= 90 ? { label: '완벽한 조합!', emoji: '🏆', color: 'text-amber-600' }
+    : score >= 80 ? { label: '훌륭한 코디!', emoji: '✨', color: 'text-terra-600' }
+    : score >= 65 ? { label: '좋은 조합이에요', emoji: '👍', color: 'text-sage' }
+    : score >= 50 ? { label: '나쁘지 않아요', emoji: '🙂', color: 'text-warm-600' }
+    : { label: '개선해볼까요?', emoji: '💪', color: 'text-warm-500' }
+
+  const isHighScore = score >= 80
+
   return (
     <div className="animate-screen-enter">
       {/* 마네킹 토글 */}
       <button
         onClick={() => build.setVizCollapsed(!build.vizCollapsed)}
+        aria-expanded={!build.vizCollapsed}
+        aria-label="마네킹 미리보기"
         className="w-full text-center text-xs text-warm-600 py-2 mb-2 active:opacity-70"
       >
         {build.vizCollapsed ? '👤 마네킹 보기 ▼' : '👤 마네킹 접기 ▲'}
@@ -623,20 +734,47 @@ function StepResult({ build, navigate }: { build: BH, navigate: any }) {
         </div>
       )}
 
-      {/* 점수 */}
-      <div className="flex justify-center mb-5">
+      {/* 점수 + 축하 */}
+      <div className="flex flex-col items-center mb-5 relative">
+        {/* 고득점 축하 파티클 */}
+        {isHighScore && (
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            {['🎉', '⭐', '✨', '🌟', '💫', '🎊'].map((emoji, i) => (
+              <span
+                key={i}
+                className="absolute text-lg animate-confetti"
+                style={{
+                  left: `${15 + i * 13}%`,
+                  animationDelay: `${i * 0.15}s`,
+                  animationDuration: `${1.2 + i * 0.2}s`,
+                }}
+              >
+                {emoji}
+              </span>
+            ))}
+          </div>
+        )}
+
         <div className="relative w-[120px] h-[120px]">
           <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
             <circle cx={60} cy={60} r={52} fill="none" stroke="#E7E5E4" strokeWidth={8} />
-            <circle cx={60} cy={60} r={52} fill="none" stroke="#C2785C" strokeWidth={8}
+            <circle cx={60} cy={60} r={52} fill="none"
+              stroke={isHighScore ? '#6B9E76' : '#C2785C'}
+              strokeWidth={8}
               strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round"
               className="transition-all duration-700"
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="font-display text-3xl font-bold text-warm-900">{score}</span>
+            <span className="font-display text-3xl font-bold text-warm-900 animate-score-count">{score}</span>
             <span className="text-[10px] text-warm-600">/ 100</span>
           </div>
+        </div>
+
+        {/* 등급 라벨 */}
+        <div className={`mt-3 text-sm font-bold ${scoreGrade.color} animate-pop-in flex items-center gap-1.5`}>
+          <span>{scoreGrade.emoji}</span>
+          <span>{scoreGrade.label}</span>
         </div>
       </div>
 
@@ -700,54 +838,47 @@ function StepResult({ build, navigate }: { build: BH, navigate: any }) {
         </div>
       </div>
 
-      {/* 액션 */}
-      <div className="flex flex-col gap-2.5 mb-5">
-        <button onClick={() => { setSaveName(build.state.style || '코디'); setSaveModal(true) }} className="w-full py-3.5 bg-terra-500 text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-terra">
-          <Bookmark size={18} /> 이 코디 저장하기
+      {/* ═══ 액션 영역 (정리됨) ═══ */}
+
+      {/* Primary CTA: 저장 */}
+      <button
+        onClick={handleSave}
+        className="w-full py-3.5 bg-terra-500 text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-terra mb-3"
+      >
+        <Bookmark size={18} /> 이 코디 저장하기
+      </button>
+
+      {/* Secondary: 아이콘 버튼 3열 */}
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        <button
+          onClick={handleShare}
+          className="flex flex-col items-center gap-1.5 py-3 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl active:scale-[0.97] transition-all shadow-warm-sm"
+        >
+          <Share size={18} className="text-warm-700 dark:text-warm-300" />
+          <span className="text-[11px] text-warm-600 dark:text-warm-400 font-medium">공유</span>
         </button>
-        <button onClick={() => { navigator.share?.({ title: "바루픽 코디", text: "코디 점수: " + build.getScore() + "점", url: "https://barupick-react.vercel.app" }).catch(() => {}) }} className="w-full py-3 bg-white border border-warm-400 text-warm-800 rounded-2xl font-medium text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
-          <Share size={16} /> 이 조합 공유하기
+        <button
+          onClick={handleCommunityShare}
+          className="flex flex-col items-center gap-1.5 py-3 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl active:scale-[0.97] transition-all shadow-warm-sm"
+        >
+          <Users size={18} className="text-warm-700 dark:text-warm-300" />
+          <span className="text-[11px] text-warm-600 dark:text-warm-400 font-medium">커뮤니티</span>
         </button>
-        <button onClick={() => { const outfit = {}; Object.entries(build.state.colors).forEach(([k,v]) => { if(v) outfit[k]=v }); localStorage.setItem("_pending_post_outfit", JSON.stringify(outfit)); navigate("/community/post") }} className="w-full py-3 bg-warm-900 text-white rounded-2xl font-medium text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
-          <Users size={16} /> 커뮤니티에 공유
+        <button
+          onClick={() => build.pushStep('improve')}
+          className="flex flex-col items-center gap-1.5 py-3 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl active:scale-[0.97] transition-all shadow-warm-sm"
+        >
+          <RefreshCw size={18} className="text-warm-700 dark:text-warm-300" />
+          <span className="text-[11px] text-warm-600 dark:text-warm-400 font-medium">비슷한 코디</span>
         </button>
       </div>
 
-      {/* 저장 모달 */}
-      {saveModal && (
-        <div className="fixed inset-0 z-[300] bg-black/50 flex items-center justify-center px-8" onClick={() => setSaveModal(false)}>
-          <div className="bg-white dark:bg-warm-800 rounded-2xl p-5 w-full max-w-sm shadow-warm-lg" onClick={e => e.stopPropagation()}>
-            <div className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-3">코디 저장</div>
-            <input type="text" value={saveName} onChange={e => setSaveName(e.target.value)} maxLength={30} autoFocus
-              placeholder="코디 이름을 입력하세요"
-              className="w-full px-4 py-3 bg-warm-100 dark:bg-warm-700 border border-warm-400 dark:border-warm-600 rounded-xl text-sm text-warm-900 dark:text-warm-100 placeholder-warm-500 focus:outline-none focus:border-terra-400 mb-4" />
-            <div className="flex gap-2">
-              <button onClick={() => setSaveModal(false)} className="flex-1 py-2.5 bg-warm-200 dark:bg-warm-700 text-warm-700 dark:text-warm-300 rounded-xl text-sm font-medium active:scale-[0.98]">취소</button>
-              <button onClick={() => {
-                const name = saveName.trim() || build.state.style || '코디'
-                const outfit = {}; Object.entries(build.state.colors).forEach(([k,v]) => { if(v) outfit[k]=v })
-                const saved = JSON.parse(localStorage.getItem('cs_saved') || '[]')
-                saved.unshift({ id: Date.now().toString(36), outfit, score: build.getScore(), name, createdAt: Date.now() })
-                if (saved.length > 100) saved.length = 100
-                localStorage.setItem('cs_saved', JSON.stringify(saved))
-                setSaveModal(false); setSaveName(''); alert('저장했어요!')
-              }} className="flex-1 py-2.5 bg-terra-500 text-white rounded-xl text-sm font-semibold active:scale-[0.98] shadow-terra">저장</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <button
-        onClick={() => build.pushStep('improve')}
-        className="w-full py-3.5 bg-terra-500 text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-terra mb-2.5"
-      >
-        비슷한 코디 추천받기
-      </button>
+      {/* Tertiary: 텍스트 링크 */}
       <button
         onClick={() => navigate('/home')}
-        className="w-full py-3 bg-white border border-warm-400 text-warm-700 rounded-2xl font-medium text-sm mb-12 active:scale-[0.98] transition-all"
+        className="w-full py-2 text-sm text-warm-600 text-center active:opacity-70 transition-opacity mb-6"
       >
-        처음으로
+        처음으로 돌아가기
       </button>
     </div>
   )
