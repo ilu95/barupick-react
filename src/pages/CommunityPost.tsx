@@ -128,7 +128,7 @@ export default function CommunityPost() {
           onChange={e => setCaption(e.target.value)}
           placeholder="오늘의 코디를 소개해보세요"
           maxLength={200}
-          className="w-full h-24 px-4 py-3 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl text-sm text-warm-900 placeholder-warm-500 focus:outline-none focus:border-terra-400 resize-none"
+          className="w-full h-24 px-4 py-3 bg-white border border-warm-400 rounded-2xl text-sm text-warm-900 placeholder-warm-500 focus:outline-none focus:border-terra-400 resize-none"
         />
         <div className="text-right text-[11px] text-warm-500 mt-1">{caption.length}/200</div>
       </div>
@@ -167,7 +167,7 @@ export default function CommunityPost() {
               key={v.key}
               onClick={() => setVisibility(v.key as any)}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                visibility === v.key ? 'bg-terra-500 text-white shadow-terra' : 'bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 text-warm-700'
+                visibility === v.key ? 'bg-terra-500 text-white shadow-terra' : 'bg-white border border-warm-400 text-warm-700'
               }`}
             >{v.icon} {v.label}</button>
           ))}

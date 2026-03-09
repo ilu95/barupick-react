@@ -157,7 +157,7 @@ export default function CommunityDetail() {
 
       {/* 컬러 정보 */}
       {Object.keys(outfit).length > 0 && (
-        <div className="bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl p-3 mb-5 shadow-warm-sm">
+        <div className="bg-white border border-warm-400 rounded-2xl p-3 mb-5 shadow-warm-sm">
           <div className="flex gap-2 flex-wrap">
             {Object.entries(outfit).filter(([_, v]) => v).map(([part, ck]) => {
               const c = COLORS_60[ck as string]

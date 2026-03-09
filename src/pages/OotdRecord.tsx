@@ -225,14 +225,14 @@ export default function OotdRecord() {
               key={s}
               onClick={() => { setCustomSit(false); ootd.setSituation(ootd.situation === s ? null : s) }}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                ootd.situation === s ? 'bg-terra-500 text-white shadow-terra' : 'bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 text-warm-700 dark:text-warm-300 active:scale-95'
+                ootd.situation === s ? 'bg-terra-500 text-white shadow-terra' : 'bg-white border border-warm-400 text-warm-700 active:scale-95'
               }`}
             >{s}</button>
           ))}
           <button
             onClick={() => { setCustomSit(!customSit); ootd.setSituation(null) }}
             className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-              customSit ? 'bg-terra-500 text-white shadow-terra' : 'bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 text-warm-700 dark:text-warm-300 active:scale-95'
+              customSit ? 'bg-terra-500 text-white shadow-terra' : 'bg-white border border-warm-400 text-warm-700 active:scale-95'
             }`}
           >✏️ 직접 입력</button>
         </div>
@@ -242,7 +242,7 @@ export default function OotdRecord() {
             type="text"
             placeholder="직접 입력 (예: 소개팅, 결혼식...)"
             maxLength={20}
-            className="w-full mt-2 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-xl px-3 py-2 text-xs text-warm-900 placeholder-warm-500 outline-none focus:border-terra-400 transition-all"
+            className="w-full mt-2 bg-white border border-warm-400 rounded-xl px-3 py-2 text-xs text-warm-900 placeholder-warm-500 outline-none focus:border-terra-400 transition-all"
             onChange={e => ootd.setSituation(e.target.value || null)}
           />
         )}
@@ -258,7 +258,7 @@ export default function OotdRecord() {
                 key={val}
                 onClick={() => ootd.setMood(ootd.mood === val ? null : val)}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                  ootd.mood === val ? 'bg-terra-500 text-white shadow-terra' : 'bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 text-warm-700 dark:text-warm-300 active:scale-95'
+                  ootd.mood === val ? 'bg-terra-500 text-white shadow-terra' : 'bg-white border border-warm-400 text-warm-700 active:scale-95'
                 }`}
               >{val}</button>
             )
@@ -274,7 +274,7 @@ export default function OotdRecord() {
           maxLength={100}
           value={ootd.memo}
           onChange={e => ootd.setMemo(e.target.value)}
-          className="w-full bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-xl px-3 py-2.5 text-xs text-warm-900 placeholder-warm-500 outline-none focus:border-terra-400 transition-all"
+          className="w-full bg-white border border-warm-400 rounded-xl px-3 py-2.5 text-xs text-warm-900 placeholder-warm-500 outline-none focus:border-terra-400 transition-all"
         />
       </div>
 
