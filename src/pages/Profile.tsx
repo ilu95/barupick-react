@@ -5,6 +5,9 @@ import { BarChart3, Award, Palette, ScanLine, GraduationCap, Target, FileText, S
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { gamification } from '@/lib/gamification'
+import { profile as profileLib } from '@/lib/profile'
+import { PERSONAL_COLOR_12 } from '@/lib/personalColor'
+import { BODY_GUIDE_DATA } from '@/lib/bodyType'
 import ImageEditor from '@/components/ui/ImageEditor'
 
 export default function Profile() {
@@ -63,13 +66,25 @@ export default function Profile() {
       // dataURL → Blob
       const resp = await fetch(croppedDataUrl)
       const blob = await resp.blob()
-      const path = `${user.id}/avatar.webp`
-      const { error } = await supabase.storage.from('avatars').upload(path, blob, { upsert: true, contentType: 'image/webp' })
-      if (error) throw error
+      const path = `${user.id}/avatar_${Date.now()}.webp`
+      const { error: uploadErr } = await supabase.storage.from('avatars').upload(path, blob, { upsert: true, contentType: 'image/webp' })
+
+      if (uploadErr) {
+        // Storage RLS 미설정 시 폴백: dataURL을 직접 프로필에 저장
+        console.warn('Storage upload failed, using dataURL fallback:', uploadErr.message)
+        await updateProfile({ avatar_url: croppedDataUrl })
+        return
+      }
+
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
       await updateProfile({ avatar_url: urlData.publicUrl + '?t=' + Date.now() })
     } catch (err: any) {
-      alert('아바타 변경 실패: ' + (err.message || ''))
+      // 최종 폴백: dataURL 직접 저장
+      try {
+        await updateProfile({ avatar_url: croppedDataUrl })
+      } catch {
+        alert('아바타 변경 실패: ' + (err.message || ''))
+      }
     }
   }
 
@@ -227,8 +242,22 @@ export default function Profile() {
 
       {/* 나의 진단 */}
       <MenuSection icon={<ScanFace size={14} />} title="나의 진단">
-        <MenuItem icon={<Palette size={18} />} label="퍼스널컬러" badge="미설정" badgeVariant="muted" onClick={() => navigate('/profile/personal-color')} />
-        <MenuItem icon={<BarChart3 size={18} />} label="체형 진단" badge="미설정" badgeVariant="muted" onClick={() => navigate('/home/body')} last />
+        {(() => {
+          const pcKey = profileLib.getPersonalColor()
+          const pcData = pcKey ? (PERSONAL_COLOR_12 as any)[pcKey] : null
+          const pcLabel = pcData ? pcData.name : '미설정'
+
+          const btKey = profileLib.getBodyType()
+          const btData = btKey ? (BODY_GUIDE_DATA as any)[btKey] : null
+          const btLabel = btData ? btData.name : '미설정'
+
+          return (
+            <>
+              <MenuItem icon={<Palette size={18} />} label="퍼스널컬러" badge={pcLabel} badgeVariant={pcData ? undefined : 'muted'} onClick={() => navigate('/profile/personal-color')} />
+              <MenuItem icon={<BarChart3 size={18} />} label="체형 진단" badge={btLabel} badgeVariant={btData ? undefined : 'muted'} onClick={() => navigate('/home/body')} last />
+            </>
+          )
+        })()}
       </MenuSection>
 
       {/* 관리/설정 */}

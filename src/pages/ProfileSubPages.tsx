@@ -404,35 +404,112 @@ export function MyPosts() {
   const { user } = useAuth()
   const [posts, setPosts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<'all' | 'public' | 'friends' | 'private'>('all')
 
   useEffect(() => {
     if (!user) { setLoading(false); return }
-    supabase.from('posts').select('id, created_at, likes_count, view_count, save_count, comments_count, outfit, style, caption, photo_urls, score')
+    // status 필터 없이 본인 게시물 전체 로드 (비공개 포함)
+    supabase.from('posts').select('id, created_at, likes_count, view_count, save_count, comments_count, outfit, style, caption, photo_urls, score, visibility, status')
       .eq('user_id', user.id).order('created_at', { ascending: false })
       .then(({ data }) => { setPosts(data || []); setLoading(false) })
   }, [user])
 
+  // OOTD 기록도 로드 (비공개 기록 = 커뮤니티에 공유 안 한 것)
+  const ootdRecords = useMemo(() => {
+    try {
+      const records = JSON.parse(localStorage.getItem('sp_ootd_records') || '[]')
+      // posts에 없는 기록만 (postId가 없거나 posts에 없는 것)
+      const postIds = new Set(posts.map(p => p.id))
+      return records.filter((r: any) => !r.postId || !postIds.has(r.postId))
+    } catch { return [] }
+  }, [posts])
+
   if (loading) return <div className="animate-screen-fade px-5 pt-6 text-center py-20 text-sm text-warm-400">불러오는 중...</div>
+
+  const publicPosts = posts.filter(p => p.visibility === 'public')
+  const friendsPosts = posts.filter(p => p.visibility === 'friends')
+  const privatePosts = posts.filter(p => p.visibility === 'private')
+
+  const tabs = [
+    { key: 'all', label: `전체 (${posts.length + ootdRecords.length})` },
+    { key: 'public', label: `전체 공개 (${publicPosts.length})` },
+    { key: 'friends', label: `친구 (${friendsPosts.length})` },
+    { key: 'private', label: `비공개 (${privatePosts.length + ootdRecords.length})` },
+  ]
+
+  const getFiltered = () => {
+    if (activeTab === 'public') return { posts: publicPosts, records: [] }
+    if (activeTab === 'friends') return { posts: friendsPosts, records: [] }
+    if (activeTab === 'private') return { posts: privatePosts, records: ootdRecords }
+    return { posts, records: ootdRecords }
+  }
+
+  const { posts: filteredPosts, records: filteredRecords } = getFiltered()
+
+  const visibilityBadge = (v: string) => {
+    if (v === 'public') return <span className="text-[8px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-1.5 py-0.5 rounded-full font-bold">공개</span>
+    if (v === 'friends') return <span className="text-[8px] bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded-full font-bold">친구</span>
+    return <span className="text-[8px] bg-warm-200 dark:bg-warm-700 text-warm-600 dark:text-warm-400 px-1.5 py-0.5 rounded-full font-bold">비공개</span>
+  }
 
   return (
     <div className="animate-screen-fade px-5 pt-2 pb-10">
-      <h2 className="font-display text-xl font-bold text-warm-900 tracking-tight mb-5">내 게시물 ({posts.length})</h2>
-      {posts.length > 0 ? (
-        <div className="grid grid-cols-3 gap-1.5">
-          {posts.map(p => {
+      <h2 className="font-display text-xl font-bold text-warm-900 dark:text-warm-100 tracking-tight mb-3">내 게시물</h2>
+
+      {/* 탭 */}
+      <div className="flex gap-1.5 overflow-x-auto pb-2 mb-4 hide-scrollbar">
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => setActiveTab(t.key as any)}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium transition-all ${
+              activeTab === t.key ? 'bg-warm-900 dark:bg-warm-100 text-white dark:text-warm-900' : 'bg-warm-100 dark:bg-warm-800 border border-warm-300 dark:border-warm-600 text-warm-600 dark:text-warm-400'
+            }`}
+          >{t.label}</button>
+        ))}
+      </div>
+
+      {/* 커뮤니티 게시물 */}
+      {filteredPosts.length > 0 && (
+        <div className="grid grid-cols-3 gap-1.5 mb-4">
+          {filteredPosts.map(p => {
             const hasPhoto = p.photo_urls && p.photo_urls.length > 0
             const outfitHex: Record<string, string> = {}
             Object.entries(p.outfit || {}).forEach(([k, v]) => { if (v) outfitHex[k] = COLORS_60[v as string]?.hex || (v as string) })
             return (
-              <button key={p.id} onClick={() => navigate(`/community/${p.id}`)} className="aspect-square rounded-xl overflow-hidden bg-warm-100 active:scale-95 transition-transform relative">
+              <button key={p.id} onClick={() => navigate(`/community/${p.id}`)} className="aspect-square rounded-xl overflow-hidden bg-warm-100 dark:bg-warm-800 active:scale-95 transition-transform relative">
                 {hasPhoto ? <img src={p.photo_urls[0]} className="w-full h-full object-cover" alt="" />
                 : <div className="w-full h-full flex items-center justify-center"><MannequinSVG outfit={outfitHex} size={50} /></div>}
+                <div className="absolute top-0.5 left-0.5">{visibilityBadge(p.visibility)}</div>
                 <div className="absolute bottom-0.5 right-0.5 text-[9px] font-bold text-white bg-black/40 px-1.5 py-0.5 rounded-full">♡{p.likes_count||0}</div>
               </button>
             )
           })}
         </div>
-      ) : <div className="text-center py-16"><FileText size={40} className="text-warm-400 mx-auto mb-3" /><div className="text-sm text-warm-600">아직 게시물이 없어요</div></div>}
+      )}
+
+      {/* 비공개 OOTD 기록 (커뮤니티 미공유) */}
+      {filteredRecords.length > 0 && (activeTab === 'all' || activeTab === 'private') && (
+        <>
+          <div className="text-[11px] font-semibold text-warm-500 dark:text-warm-400 uppercase tracking-widest mb-2 mt-2">비공개 기록 ({filteredRecords.length})</div>
+          <div className="grid grid-cols-3 gap-1.5">
+            {filteredRecords.map((r: any, idx: number) => {
+              const outfitHex: Record<string, string> = {}
+              Object.entries(r.colors || {}).forEach(([k, v]) => { if (v) outfitHex[k] = COLORS_60[v as string]?.hex || '' })
+              return (
+                <button key={r.id || idx} onClick={() => navigate(`/closet/ootd/${r.date}?id=${r.id}`)} className="aspect-square rounded-xl overflow-hidden bg-warm-50 dark:bg-warm-800 active:scale-95 transition-transform relative border border-warm-300 dark:border-warm-600">
+                  {r.photos?.[0] ? <img src={r.photos[0]} className="w-full h-full object-cover" alt="" />
+                  : <div className="w-full h-full flex items-center justify-center"><MannequinSVG outfit={outfitHex} size={50} /></div>}
+                  <div className="absolute top-0.5 left-0.5">{visibilityBadge('private')}</div>
+                  <div className="absolute bottom-0.5 right-0.5 text-[9px] font-bold text-white bg-black/40 px-1.5 py-0.5 rounded-full">{r.score}점</div>
+                </button>
+              )
+            })}
+          </div>
+        </>
+      )}
+
+      {filteredPosts.length === 0 && filteredRecords.length === 0 && (
+        <div className="text-center py-16"><FileText size={40} className="text-warm-400 mx-auto mb-3" /><div className="text-sm text-warm-600 dark:text-warm-400">아직 게시물이 없어요</div></div>
+      )}
     </div>
   )
 }

@@ -155,12 +155,16 @@ export default function OotdDetail() {
     <div className="animate-screen-fade px-5 pt-2 pb-10">
       {/* 사진 갤러리 */}
       {record.photos && record.photos.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-3 mb-4 hide-scrollbar -mx-5 px-5">
+        <div className={`mb-4 -mx-5 px-5 ${record.photos.length === 1 ? '' : 'flex gap-2 overflow-x-auto pb-3 hide-scrollbar'}`}>
           {record.photos.map((photo, idx) => (
             <img
               key={idx}
               src={photo}
-              className="w-60 h-80 rounded-2xl object-cover flex-shrink-0"
+              className={`rounded-2xl object-cover flex-shrink-0 ${
+                record.photos.length === 1
+                  ? 'w-full max-h-[70vh]'
+                  : 'w-[85vw] max-w-[400px] h-[60vh] max-h-[500px]'
+              }`}
               alt={`코디 사진 ${idx + 1}`}
             />
           ))}

@@ -3,6 +3,8 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { MOOD_GROUPS, LAYER_LEVELS, STYLE_GUIDE } from '@/lib/styles'
 import { getDynamicCombos } from '@/lib/recommend'
+import { evaluationSystem } from '@/lib/evaluation'
+import { profile } from '@/lib/profile'
 
 export type RecStep = 'mood' | 'style' | 'layer' | 'garment' | 'pin' | 'results' | 'detail'
 
@@ -233,19 +235,16 @@ function generateRecommendations(s: RecState): ComboResult[] {
 
   try {
     if (style) {
-      // 특정 스타일 지정 → 해당 스타일로 생성
       results = getDynamicCombos(style, layerType, 30, pinned)
     } else if (mood && MOOD_GROUPS[mood]) {
-      // 무드만 지정 → 무드 내 모든 스타일에서 생성
       const styles = MOOD_GROUPS[mood].styles || []
       styles.forEach((st: string) => {
-        results.push(...getDynamicCombos(st, layerType, 8, pinned))
+        try { results.push(...getDynamicCombos(st, layerType, 8, pinned)) } catch {}
       })
       results.sort((a, b) => b.score - a.score)
     } else {
-      // 전체 → 모든 스타일에서 소량씩
       Object.keys(STYLE_GUIDE).forEach(st => {
-        results.push(...getDynamicCombos(st, layerType, 4, pinned))
+        try { results.push(...getDynamicCombos(st, layerType, 4, pinned)) } catch {}
       })
       results.sort((a, b) => b.score - a.score)
     }
@@ -253,5 +252,51 @@ function generateRecommendations(s: RecState): ComboResult[] {
     console.error('Recommendation generation error:', e)
   }
 
+  // 결과 0이면 폴백: 기본 중립색 조합 생성
+  if (results.length === 0) {
+    results = generateFallbackCombos(s)
+  }
+
   return results.slice(0, 30)
+}
+
+// 폴백 조합 생성 (엔진 실패 시)
+function generateFallbackCombos(s: RecState): ComboResult[] {
+  const { layerType, pinned } = s
+  const layer = LAYER_LEVELS[layerType]
+  if (!layer) return []
+  const partKeys = layer.partKeys || ['top', 'bottom', 'shoes']
+
+  const palettes = [
+    { top: 'white', bottom: 'navy', outer: 'charcoal', shoes: 'brown', middleware: 'gray', scarf: 'beige' },
+    { top: 'cream', bottom: 'olive', outer: 'camel', shoes: 'dark_brown', middleware: 'beige', scarf: 'ivory' },
+    { top: 'lightgray', bottom: 'charcoal', outer: 'navy', shoes: 'black', middleware: 'white', scarf: 'gray' },
+    { top: 'beige', bottom: 'brown', outer: 'olive', shoes: 'cognac', middleware: 'cream', scarf: 'camel' },
+    { top: 'ivory', bottom: 'denim', outer: 'burgundy', shoes: 'brown', middleware: 'white', scarf: 'charcoal' },
+    { top: 'white', bottom: 'black', outer: 'camel', shoes: 'white', middleware: 'lightgray', scarf: 'ivory' },
+    { top: 'navy', bottom: 'khaki', outer: 'charcoal', shoes: 'brown', middleware: 'white', scarf: 'navy' },
+    { top: 'cream', bottom: 'charcoal', outer: 'brown', shoes: 'black', middleware: 'beige', scarf: 'taupe' },
+  ]
+
+  return palettes.map((pal, i) => {
+    const outfit: Record<string, string> = {}
+    partKeys.forEach(pk => {
+      outfit[pk] = (pinned as any)?.[pk] || pal[pk] || 'white'
+    })
+    let score = 50
+    try {
+      const pc = profile.getPersonalColor()
+      const evalResult = evaluationSystem.evaluate(outfit, pc)
+      score = evalResult?.total || 50
+    } catch {}
+    return {
+      id: `fallback_${i}`,
+      name: `기본 코디 ${i + 1}`,
+      outfit,
+      tags: ['기본'],
+      tip: '기본 중립색 조합이에요',
+      score,
+      evalResult: null,
+    }
+  })
 }
