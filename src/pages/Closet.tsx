@@ -267,7 +267,7 @@ function RecordCard({ record, navigate }: { record: OotdRecord, navigate: any })
         className="w-full bg-white border border-warm-400 rounded-2xl overflow-hidden shadow-warm-sm active:scale-[0.98] transition-all text-left"
       >
         {/* 사진 — 큰 사이즈 */}
-        <img src={record.photos[0]} className="w-full aspect-[4/3] object-cover" alt="" />
+        <img src={record.photos[0]} className="w-full aspect-[4/5] object-cover" alt="" />
 
         {/* 하단 정보 바 */}
         <div className="flex items-center gap-3 px-3 py-2.5">

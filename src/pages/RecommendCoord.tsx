@@ -556,7 +556,7 @@ function StepDetail({ rec, navigate }: { rec: RecHook, navigate: any }) {
 
   // 점수 분해 항목
   const scoreItems = evalResult ? [
-    { label: '골디락스', value: evalResult.goldilocks, max: 33, desc: '2~3색 최적 법칙' },
+    { label: '컬러 배치', value: evalResult.goldilocks, max: 33, desc: '인접 부위 연결 + 역할 명확성' },
     { label: '비율', value: evalResult.ratio, max: 17, desc: '60-30-10 배분' },
     { label: '조화도', value: evalResult.harmony, max: 17, desc: 'HCL 색상 조화' },
     { label: '색온도', value: evalResult.season, max: 17, desc: '웜/쿨 일관성' },

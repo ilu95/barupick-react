@@ -61,23 +61,213 @@ export const evaluationSystem = {
         return maxCount / colors.length;
     },
 
-    // 골디락스 점수 (0-20점)
+    // ── V6 쌍별 점수 (공용: harmony와 goldilocksPlacement 모두 사용) ──
+    // 두 색상 키의 조화 점수를 반환 (-55 ~ +120 범위)
+    _calculatePairV6Score(colorKey1, colorKey2) {
+        const c1 = COLORS_60[colorKey1];
+        const c2 = COLORS_60[colorKey2];
+        if (!c1 || !c2) return 0;
+
+        const [h1, ch1, l1] = c1.hcl;
+        const [h2, ch2, l2] = c2.hcl;
+
+        const hueDiff = getHueDiff(h1, h2);
+        const lDiff = Math.abs(l1 - l2);
+        const cDiff = Math.abs(ch1 - ch2);
+
+        const tone1 = getToneGroup(h1, ch1, l1);
+        const tone2 = getToneGroup(h2, ch2, l2);
+
+        let pairScore = 0;
+        let hasSpecialCombo = false;
+        let hasPenalty = false;
+
+        // 1단계: 특수 조합
+        if (AVOID_COMBOS[colorKey1]?.includes(colorKey2) ||
+            AVOID_COMBOS[colorKey2]?.includes(colorKey1)) {
+            pairScore -= 55;
+            hasPenalty = true;
+        } else if (CLASSIC_COMBOS[colorKey1]?.includes(colorKey2) ||
+            CLASSIC_COMBOS[colorKey2]?.includes(colorKey1)) {
+            pairScore += 55;
+            hasSpecialCombo = true;
+        } else if (hueDiff < 30 && lDiff >= 30 && ch1 > 12 && ch2 > 12) {
+            pairScore += 45; // 톤온톤
+            hasSpecialCombo = true;
+        } else if (PASTEL_COLORS.includes(colorKey1) && PASTEL_COLORS.includes(colorKey2)) {
+            pairScore += 40;
+            hasSpecialCombo = true;
+        } else if (EARTH_TONE_COLORS.includes(colorKey1) && EARTH_TONE_COLORS.includes(colorKey2)) {
+            pairScore += 35;
+            hasSpecialCombo = true;
+        }
+
+        // 2단계: 감점
+        if (!hasSpecialCombo && !hasPenalty) {
+            if (hueDiff < 15 && lDiff < 25 && ch1 > 12 && ch2 > 12) {
+                pairScore -= 45;
+                hasPenalty = true;
+            } else if (tone1 === 'bright' && tone2 === 'bright' &&
+                hueDiff >= 100 && hueDiff <= 140) {
+                pairScore -= 40;
+                hasPenalty = true;
+            } else if (ch1 >= 50 && ch2 >= 50 && hueDiff >= 50 && hueDiff <= 100) {
+                pairScore -= 25;
+                hasPenalty = true;
+            }
+        }
+
+        // 3단계: 가점
+        if (!hasPenalty) {
+            const isNeutral1 = isNeutralColor(ch1);
+            const isNeutral2 = isNeutralColor(ch2);
+
+            if (isNeutral1 || isNeutral2) {
+                pairScore += 30;
+                if (isNeutral1 && !isNeutral2) pairScore += 18;
+                else if (!isNeutral1 && isNeutral2) pairScore += 15;
+            }
+
+            if (lDiff >= 50) pairScore += 28;
+            else if (lDiff >= 35) pairScore += 20;
+            else if (lDiff >= 20) pairScore += 12;
+
+            if ((tone1 === 'deep' && l2 >= 60) || (tone2 === 'deep' && l1 >= 60)) {
+                pairScore += 22;
+            }
+
+            const temp1 = getColorTemperature(h1, ch1, l1);
+            const temp2 = getColorTemperature(h2, ch2, l2);
+            if (temp1.temp === temp2.temp && temp1.temp !== 'neutral') {
+                pairScore += 15;
+            }
+
+            if (hueDiff >= 15 && hueDiff <= 60 && ch1 > 12 && ch2 > 12) {
+                pairScore += 18;
+            }
+
+            if (cDiff < 30 && ch1 > 12 && ch2 > 12) {
+                pairScore += 10;
+            }
+        }
+
+        return pairScore;
+    },
+
+    // ================================================================
+    // 컬러 배치 점수 (0-20점) — 기존 골디락스 대체
+    // 기존: "색상 개수가 2~3개인가" → 개수 기반
+    // 변경: "인접 부위끼리 잘 어울리는가 + 역할이 명확한가" → 품질 기반
+    // ================================================================
     calculateGoldilocksScore(outfit) {
-        const colorInfo = this.countEffectiveColors(outfit);
-        const uniqueColors = colorInfo.unique;
-        const effectiveCount = colorInfo.effective;
-        const repeatRatio = this.calculateColorRepeatRatio(outfit);
+        const filledParts = Object.entries(outfit).filter(([_, v]) => v);
+        if (filledParts.length < 2) return 10; // 1색: 기본 점수
 
-        if (uniqueColors === 2 && repeatRatio >= 0.3 && repeatRatio <= 0.6) return 20;
-        if (uniqueColors === 3 && repeatRatio >= 0.3 && repeatRatio <= 0.5) return 20;
-        if (uniqueColors === 3 && repeatRatio > 0) return 18;
-        if (uniqueColors === 2 && repeatRatio > 0.6) return 15;
-        if (uniqueColors === 3 && repeatRatio === 0) return 12;
-        if (uniqueColors === 1) return 10;
-        if (effectiveCount >= 4) return 5;
-        if (uniqueColors === 2 && repeatRatio < 0.3) return 12;
+        // ── 지표 A: 가중 인접 조화 (0~12점) ──
+        const adjacencyA = this._calculateAdjacentScore(outfit);
 
-        return 8;
+        // ── 지표 B: 역할 명확성 (0~8점) ──
+        const clarityB = this._calculateRoleClarity(outfit);
+
+        return Math.min(20, Math.round(adjacencyA + clarityB));
+    },
+
+    // 지표 A: 인접 부위 간 가중 조화 점수
+    _calculateAdjacentScore(outfit) {
+        // 시각적 중요도 순 인접 쌍 정의
+        const ADJACENT_PAIRS = [
+            ['top', 'bottom', 3.0],       // 가장 눈에 띄는 경계
+            ['outer', 'top', 2.0],        // 아우터↔이너
+            ['bottom', 'shoes', 2.0],     // 하단 마무리
+            ['outer', 'middleware', 1.5],  // 아우터↔중간층
+            ['middleware', 'top', 1.5],    // 중간층↔이너
+            ['scarf', 'top', 1.0],        // 목도리↔상의
+            ['scarf', 'outer', 1.0],      // 목도리↔아우터
+            ['hat', 'top', 0.5],          // 모자↔상의
+        ];
+
+        let weightedSum = 0;
+        let totalWeight = 0;
+
+        ADJACENT_PAIRS.forEach(([partA, partB, weight]) => {
+            const colorA = outfit[partA];
+            const colorB = outfit[partB];
+            if (!colorA || !colorB) return; // 해당 부위가 없으면 스킵
+
+            let pairScore;
+            if (colorA === colorB) {
+                // 동일색 인접: 의도적 매칭. 좋지만 만점은 아님 (ceiling 80%)
+                pairScore = 50; // V6 범위에서 moderate-good
+            } else {
+                pairScore = this._calculatePairV6Score(colorA, colorB);
+            }
+
+            weightedSum += pairScore * weight;
+            totalWeight += weight;
+        });
+
+        if (totalWeight === 0) return 6; // 인접 쌍이 없음 (2색인데 떨어진 부위)
+
+        // V6 가중 평균 (-55 ~ +120) → 0~12 스케일링
+        const weightedAvg = weightedSum / totalWeight;
+
+        if (weightedAvg >= 65) return 12;
+        if (weightedAvg >= 50) return 11;
+        if (weightedAvg >= 40) return 10;
+        if (weightedAvg >= 30) return 9;
+        if (weightedAvg >= 20) return 8;
+        if (weightedAvg >= 10) return 7;
+        if (weightedAvg >= 0) return 6;
+        if (weightedAvg >= -15) return 4;
+        if (weightedAvg >= -30) return 2;
+        return 1;
+    },
+
+    // 지표 B: 역할 명확성 — 코디에서 색상의 역할 구분이 명확한가
+    _calculateRoleClarity(outfit) {
+        const layerWeights = {
+            'outer': 40, 'middleware': 25, 'top': 20, 'bottom': 35,
+            'scarf': 10, 'hat': 5, 'shoes': 15
+        };
+
+        const colorAreas = {};
+        let totalArea = 0;
+
+        Object.entries(outfit).forEach(([item, colorKey]) => {
+            if (!colorKey) return;
+            const weight = layerWeights[item] || 15;
+            colorAreas[colorKey] = (colorAreas[colorKey] || 0) + weight;
+            totalArea += weight;
+        });
+
+        if (totalArea === 0) return 4;
+
+        const uniqueColors = Object.keys(colorAreas).length;
+        const sortedRatios = Object.values(colorAreas)
+            .sort((a, b) => b - a)
+            .map(area => area / totalArea);
+
+        // 1색: 모노크롬 — 명확하지만 조합 노력 없음
+        if (uniqueColors === 1) return 5;
+
+        // 2색: 역할이 자동으로 명확
+        if (uniqueColors === 2) {
+            const gap = sortedRatios[0] - sortedRatios[1];
+            if (gap > 0.3) return 8; // 확실한 주/보조
+            if (gap > 0.15) return 7; // 적당한 차이
+            return 6; // 거의 반반이어도 2색은 기본 명확
+        }
+
+        // 3색 이상: dominant의 존재감 + 상위 2색 집중도
+        const dominantRatio = sortedRatios[0];
+        const top2Ratio = sortedRatios[0] + (sortedRatios[1] || 0);
+
+        if (dominantRatio > 0.45) return 8; // 확실한 주인공 (45%+)
+        if (dominantRatio > 0.35) return 7; // 주인공이 보임 (35%+)
+        if (top2Ratio > 0.65) return 6;     // 2색이 전체의 65%+ → 구조 있음
+        if (top2Ratio > 0.55) return 5;     // 2색이 55%+ → 약한 구조
+        if (uniqueColors >= 5) return 3;    // 5색+ & 분산 → 역할 모호
+        return 4;                           // 기본
     },
 
     // 60-30-10 비율 점수 (0-15점)
@@ -121,7 +311,7 @@ export const evaluationSystem = {
         return 5;
     },
 
-    // 조화도 점수 (0-10점) - V6 로직 적용
+    // 조화도 점수 (0-10점) - V6 로직 적용 (공용 _calculatePairV6Score 사용)
     evaluateHarmony(outfit) {
         const colors = Object.values(outfit).filter(c => c);
         if (colors.length < 2) return 5;
@@ -131,116 +321,7 @@ export const evaluationSystem = {
 
         for (let i = 0; i < colors.length; i++) {
             for (let j = i + 1; j < colors.length; j++) {
-                const baseKey = colors[i];
-                const targetKey = colors[j];
-                const c1 = COLORS_60[baseKey];
-                const c2 = COLORS_60[targetKey];
-                if (!c1 || !c2) continue;
-
-                const [h1, ch1, l1] = c1.hcl;
-                const [h2, ch2, l2] = c2.hcl;
-
-                const hueDiff = getHueDiff(h1, h2);
-                const lDiff = Math.abs(l1 - l2);
-                const cDiff = Math.abs(ch1 - ch2);
-
-                const tone1 = getToneGroup(h1, ch1, l1);
-                const tone2 = getToneGroup(h2, ch2, l2);
-
-                let pairScore = 0;
-                let hasSpecialCombo = false;
-                let hasPenalty = false;
-
-                // ========== 1단계: 특수 조합 감지 (V6) ==========
-
-                // 피해야 할 조합 (-55점)
-                if (AVOID_COMBOS[baseKey]?.includes(targetKey) ||
-                    AVOID_COMBOS[targetKey]?.includes(baseKey)) {
-                    pairScore -= 55;
-                    hasPenalty = true;
-                }
-                // 클래식 조합 (+55점)
-                else if (CLASSIC_COMBOS[baseKey]?.includes(targetKey) ||
-                    CLASSIC_COMBOS[targetKey]?.includes(baseKey)) {
-                    pairScore += 55;
-                    hasSpecialCombo = true;
-                }
-                // 톤온톤: Hue < 30° AND 명도 차이 ≥ 30 (+45점)
-                else if (hueDiff < 30 && lDiff >= 30 && ch1 > 12 && ch2 > 12) {
-                    pairScore += 45;
-                    hasSpecialCombo = true;
-                }
-                // 파스텔 조화 (+40점)
-                else if (PASTEL_COLORS.includes(baseKey) && PASTEL_COLORS.includes(targetKey)) {
-                    pairScore += 40;
-                    hasSpecialCombo = true;
-                }
-                // 어스톤 조화 (+35점)
-                else if (EARTH_TONE_COLORS.includes(baseKey) && EARTH_TONE_COLORS.includes(targetKey)) {
-                    pairScore += 35;
-                    hasSpecialCombo = true;
-                }
-
-                // ========== 2단계: 감점 시스템 ==========
-                if (!hasSpecialCombo && !hasPenalty) {
-                    // 색상 중복: Hue < 15° AND 명도 차이 < 25 (-45점)
-                    if (hueDiff < 15 && lDiff < 25 && ch1 > 12 && ch2 > 12) {
-                        pairScore -= 45;
-                        hasPenalty = true;
-                    }
-                    // 보색 충돌: Bright + Bright, Hue 100-140° (-40점)
-                    else if (tone1 === 'bright' && tone2 === 'bright' &&
-                        hueDiff >= 100 && hueDiff <= 140) {
-                        pairScore -= 40;
-                        hasPenalty = true;
-                    }
-                    // 채도 충돌: 고채도끼리, Hue 50-100° (-25점)
-                    else if (ch1 >= 50 && ch2 >= 50 && hueDiff >= 50 && hueDiff <= 100) {
-                        pairScore -= 25;
-                        hasPenalty = true;
-                    }
-                }
-
-                // ========== 3단계: 가점 시스템 ==========
-                if (!hasPenalty) {
-                    const isNeutral1 = isNeutralColor(ch1);
-                    const isNeutral2 = isNeutralColor(ch2);
-
-                    // 뉴트럴 조화 (+30점)
-                    if (isNeutral1 || isNeutral2) {
-                        pairScore += 30;
-                        if (isNeutral1 && !isNeutral2) pairScore += 18;
-                        else if (!isNeutral1 && isNeutral2) pairScore += 15;
-                    }
-
-                    // 명도 대비
-                    if (lDiff >= 50) pairScore += 28;
-                    else if (lDiff >= 35) pairScore += 20;
-                    else if (lDiff >= 20) pairScore += 12;
-
-                    // 딥라이트 조화
-                    if ((tone1 === 'deep' && l2 >= 60) || (tone2 === 'deep' && l1 >= 60)) {
-                        pairScore += 22;
-                    }
-
-                    // 온도 조화
-                    const temp1 = getColorTemperature(h1, ch1, l1);
-                    const temp2 = getColorTemperature(h2, ch2, l2);
-                    if (temp1.temp === temp2.temp && temp1.temp !== 'neutral') {
-                        pairScore += 15;
-                    }
-
-                    // 유사색 (Hue 15-60°)
-                    if (hueDiff >= 15 && hueDiff <= 60 && ch1 > 12 && ch2 > 12) {
-                        pairScore += 18;
-                    }
-
-                    // 채도 조화
-                    if (cDiff < 30 && ch1 > 12 && ch2 > 12) {
-                        pairScore += 10;
-                    }
-                }
-
+                const pairScore = this._calculatePairV6Score(colors[i], colors[j]);
                 totalScore += pairScore;
                 comparisons++;
             }
@@ -249,7 +330,6 @@ export const evaluationSystem = {
         if (comparisons === 0) return 5;
 
         // V6 점수를 0-10점으로 스케일링
-        // V6 범위: -55 ~ +120 정도 → 0-10점으로 매핑
         const avgV6Score = totalScore / comparisons;
 
         let scaledScore;
@@ -413,17 +493,17 @@ export const evaluationSystem = {
         const { goldilocks, ratio, harmony, season, balance, personal } = scores;
         let feedback = "";
 
-        // 골디락스 피드백
+        // 컬러 배치 피드백
         if (goldilocks >= 18) {
-            feedback += "색상 다양성이 완벽해요! 적당한 통일감과 변화가 조화롭습니다. ";
-        } else if (goldilocks >= 12) {
-            feedback += "색상 조합이 괜찮아요. ";
-        } else if (goldilocks === 10) {
-            feedback += "모노톤 코디네요. 안전하지만 약간의 변화를 주면 더 좋을 것 같아요. ";
-        } else if (goldilocks <= 5) {
-            feedback += "색상이 너무 많아요. 3가지 이하로 줄이면 더 세련되어 보일 거예요. ";
+            feedback += "컬러 배치가 완벽해요! 부위별 색상이 자연스럽게 연결됩니다. ";
+        } else if (goldilocks >= 14) {
+            feedback += "컬러 배치가 좋아요. 인접한 옷끼리 잘 어울려요. ";
+        } else if (goldilocks >= 10) {
+            feedback += "컬러 배치가 괜찮아요. ";
+        } else if (goldilocks >= 6) {
+            feedback += "인접한 부위의 색상 연결을 좀 더 신경쓰면 좋겠어요. ";
         } else {
-            feedback += "색상 균형을 조금 더 신경쓰면 좋겠어요. ";
+            feedback += "색상 배치를 개선해보세요. 인접한 옷끼리 톤을 맞추면 훨씬 나아질 거예요. ";
         }
 
         // 비율 피드백
@@ -520,7 +600,7 @@ export const evaluationSystem = {
         const hasBodyFit = profile.getFitMode() && profile.getBodyType() && bodyFit > 0;
 
         // 동적 분모: 활성 항목에 따라 조정
-        let rawMax = 55; // base: goldilocks(20)+ratio(10)+harmony(10)+season(10)+balance(5)
+        let rawMax = 55; // base: placement(20)+ratio(10)+harmony(10)+season(10)+balance(5)
         if (hasPersonalColor) rawMax += 10;
         if (hasBodyFit) rawMax += 5;
         const denom = Math.max(rawMax + 5, 60); // 최소 60

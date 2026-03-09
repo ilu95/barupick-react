@@ -6,6 +6,8 @@ import { COLORS_60 } from '@/lib/colors'
 import { CATEGORY_NAMES } from '@/lib/categories'
 import { useOotd } from '@/hooks/useOotd'
 import { useAuth } from '@/contexts/AuthContext'
+import { useModal } from '@/components/ui/Modal'
+import { useToast } from '@/components/ui/Toast'
 import { supabase } from '@/lib/supabase'
 import { evaluationSystem } from '@/lib/evaluation'
 
@@ -16,6 +18,8 @@ export default function OotdDetail() {
   const recordId = searchParams.get('id')
   const { getRecords, deleteRecord } = useOotd()
   const { profile: authProfile } = useAuth()
+  const modal = useModal()
+  const toast = useToast()
   const [sharing, setSharing] = useState(false)
   const [shareMsg, setShareMsg] = useState('')
 
@@ -44,9 +48,17 @@ export default function OotdDetail() {
   const dateLabel = dateObj.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })
 
   const handleDelete = () => {
-    if (!confirm('이 기록을 삭제할까요?')) return
-    deleteRecord(record.id)
-    navigate('/closet', { replace: true })
+    modal.confirm({
+      title: '기록 삭제',
+      message: '이 기록을 삭제할까요? 되돌릴 수 없습니다.',
+      confirmLabel: '삭제',
+      variant: 'danger',
+      onConfirm: () => {
+        deleteRecord(record.id)
+        toast.success('기록을 삭제했어요')
+        navigate('/closet', { replace: true })
+      },
+    })
   }
 
   const handleEdit = () => {
@@ -162,11 +174,11 @@ export default function OotdDetail() {
       {record.photos && record.photos.length > 0 && (
         <div className="mb-4 -mx-5">
           {record.photos.length === 1 ? (
-            <img src={record.photos[0]} className="w-full max-h-[75vh] object-cover" alt="코디 사진" />
+            <img src={record.photos[0]} className="w-full aspect-[4/5] object-cover" alt="코디 사진" />
           ) : (
             <div className="flex gap-1.5 overflow-x-auto pb-2 hide-scrollbar px-5">
               {record.photos.map((photo, idx) => (
-                <img key={idx} src={photo} className="w-[80vw] max-w-[380px] aspect-[3/4] rounded-xl object-cover flex-shrink-0" alt={`코디 사진 ${idx + 1}`} />
+                <img key={idx} src={photo} className="w-[80vw] max-w-[380px] aspect-[4/5] rounded-xl object-cover flex-shrink-0" alt={`코디 사진 ${idx + 1}`} />
               ))}
             </div>
           )}
