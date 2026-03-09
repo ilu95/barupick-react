@@ -177,3 +177,51 @@ export const COLOR_FAMILIES = {
     yellow: ['amber', 'mustard', 'gold', 'orange', 'burnt_orange', 'pastel_yellow', 'pastel_lemon'],
     gray: ['black', 'charcoal', 'gray', 'slate', 'silver', 'lightgray', 'white', 'ivory'],
 };
+
+// ─── 공유 컬러 유틸리티 (evaluation.ts, recommend.ts 공용) ───
+
+export const PASTEL_COLORS = [
+    'pastel_pink', 'pastel_blue', 'pastel_green', 'pastel_yellow', 'pastel_purple',
+    'pastel_mint', 'pastel_peach', 'pastel_lavender', 'pastel_coral', 'pastel_sky',
+    'pastel_lilac', 'pastel_sage', 'pastel_lemon', 'pastel_rose', 'pastel_aqua'
+];
+
+export const EARTH_TONE_COLORS = [
+    'brown', 'camel', 'olive', 'khaki', 'taupe', 'beige', 'cream', 'ivory',
+    'dark_brown', 'dark_olive', 'chocolate', 'espresso'
+];
+
+export function getHueDiff(h1: number, h2: number): number {
+    let diff = Math.abs(h1 - h2);
+    if (diff > 180) diff = 360 - diff;
+    return diff;
+}
+
+export function isNeutralColor(chroma: number): boolean {
+    return chroma <= 12;
+}
+
+export function getToneGroup(h: number, c: number, l: number): string {
+    if (c <= 12) return 'neutral';
+    if (l <= 35) return 'deep';
+    if (l >= 75) return 'light';
+    if (c >= 60) return 'bright';
+    return 'muted';
+}
+
+export function getColorTemperature(h: number, c: number, l: number) {
+    if (c <= 12) return { temp: 'neutral', score: 0 };
+    let warmScore = 0;
+    if ((h >= 0 && h <= 70) || (h >= 320 && h <= 360)) {
+        const adjustedH = h >= 320 ? h - 360 : h;
+        warmScore = 1.0 - Math.abs(adjustedH - 30) / 70;
+    } else if (h >= 200 && h <= 280) {
+        warmScore = -1.0 + Math.abs(h - 240) / 80;
+    }
+    if (c < 30) warmScore *= 0.5;
+    let tempResult;
+    if (warmScore > 0.3) tempResult = 'warm';
+    else if (warmScore < -0.3) tempResult = 'cool';
+    else tempResult = 'neutral';
+    return { temp: tempResult, score: warmScore };
+}

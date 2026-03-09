@@ -1,16 +1,18 @@
 // @ts-nocheck
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BarChart3, Award, Palette, ScanLine, GraduationCap, Target, FileText, ShieldOff, SlidersHorizontal, Share, ChevronRight, Pencil, Camera, User, ScanFace, Trophy, Settings, LogOut, LogIn } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { gamification } from '@/lib/gamification'
+import ImageEditor from '@/components/ui/ImageEditor'
 
 export default function Profile() {
   const navigate = useNavigate()
   const { user, profile: authProfile, logout, updateProfile } = useAuth()
   const [followerCount, setFollowerCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
+  const [avatarEditSrc, setAvatarEditSrc] = useState<string | null>(null)
 
   // @ts-ignore
   const gd = gamification._getData ? gamification._getData() : { records: [], streak: 0, savedCount: 0 }
@@ -42,20 +44,33 @@ export default function Profile() {
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = 'image/*'
-    input.onchange = async (e) => {
+    input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (!file) return
-      try {
-        const path = `${user.id}/avatar.webp`
-        const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: 'image/webp' })
-        if (error) throw error
-        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
-        await updateProfile({ avatar_url: urlData.publicUrl + '?t=' + Date.now() })
-      } catch (err: any) {
-        alert('아바타 변경 실패: ' + (err.message || ''))
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        setAvatarEditSrc(ev.target?.result as string)
       }
+      reader.readAsDataURL(file)
     }
     input.click()
+  }
+
+  const handleAvatarSave = async (croppedDataUrl: string) => {
+    setAvatarEditSrc(null)
+    if (!user) return
+    try {
+      // dataURL → Blob
+      const resp = await fetch(croppedDataUrl)
+      const blob = await resp.blob()
+      const path = `${user.id}/avatar.webp`
+      const { error } = await supabase.storage.from('avatars').upload(path, blob, { upsert: true, contentType: 'image/webp' })
+      if (error) throw error
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
+      await updateProfile({ avatar_url: urlData.publicUrl + '?t=' + Date.now() })
+    } catch (err: any) {
+      alert('아바타 변경 실패: ' + (err.message || ''))
+    }
   }
 
   const handleEditField = async (field: 'nickname' | 'bio' | 'instagram_id') => {
@@ -226,6 +241,16 @@ export default function Profile() {
           navigator.share?.({ title: '바루픽', text: 'AI 컬러 코디 추천 앱', url: 'https://barupick.vercel.app' }).catch(() => {})
         }} last />
       </MenuSection>
+
+      {/* 아바타 편집기 */}
+      {avatarEditSrc && (
+        <ImageEditor
+          src={avatarEditSrc}
+          cropMode="square"
+          onSave={handleAvatarSave}
+          onCancel={() => setAvatarEditSrc(null)}
+        />
+      )}
     </div>
   )
 }

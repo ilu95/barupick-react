@@ -1,12 +1,12 @@
 // @ts-nocheck
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, ArrowLeft, Bookmark, Share, Users, Palette, Scissors, ChevronRight, Sparkles, Check } from 'lucide-react'
+import { ArrowRight, ArrowLeft, Bookmark, Share, Users, Palette, Scissors, ChevronRight, Sparkles, Check, ThumbsUp, ThumbsDown, Minus } from 'lucide-react'
 import MannequinSVG from '@/components/mannequin/MannequinSVG'
 import ColorPicker from '@/components/ui/ColorPicker'
 import { COLORS_60 } from '@/lib/colors'
 import { MOOD_GROUPS, STYLE_GUIDE, STYLE_ICONS } from '@/lib/styles'
-import { CATEGORY_NAMES } from '@/lib/categories'
+import { CATEGORY_NAMES, FABRIC_ITEMS, FABRIC_SEASONS, FABRIC_COMPAT_RULES, getFabricCompat, evaluateFabricCombo } from '@/lib/categories'
 import { useBuild, type BuildStep } from '@/hooks/useBuild'
 
 export default function BuildCoord() {
@@ -20,6 +20,7 @@ export default function BuildCoord() {
       {build.step === 'garment' && <StepGarment build={build} />}
       {build.step === 'color' && <StepColor build={build} />}
       {build.step === 'ask' && <StepAsk build={build} />}
+      {build.step === 'fabric' && <StepFabric build={build} />}
       {build.step === 'result' && <StepResult build={build} navigate={navigate} />}
       {build.step === 'improve' && <StepImprove build={build} />}
     </div>
@@ -225,6 +226,10 @@ function StepColor({ build }: { build: BH }) {
   const item = build.state.currentItem
   const recs = build.getColorRecommendations(item)
   const currentColor = build.state.colors[item]
+  const filledCount = Object.values(build.state.colors).filter(Boolean).length
+
+  // 점수 변화 미리보기용 — 이미 2색 이상 선택한 상태일 때만 표시
+  const showDelta = filledCount >= 2
 
   return (
     <div className="animate-screen-enter">
@@ -237,7 +242,7 @@ function StepColor({ build }: { build: BH }) {
       </button>
 
       {!build.vizCollapsed && (
-        <div className="flex justify-center mb-4 py-4 bg-warm-100 rounded-2xl">
+        <div className="flex justify-center mb-4 py-4 bg-warm-100 dark:bg-warm-800 rounded-2xl">
           <MannequinSVG
             outfit={build.outfitHex}
             options={{ outerType: build.state.outerType, midType: build.state.midType }}
@@ -246,15 +251,15 @@ function StepColor({ build }: { build: BH }) {
         </div>
       )}
 
-      <h2 className="font-display text-lg font-bold text-warm-900 tracking-tight mb-1 flex items-center gap-2">
+      <h2 className="font-display text-lg font-bold text-warm-900 dark:text-warm-100 tracking-tight mb-1 flex items-center gap-2">
         <Palette size={20} className="text-terra-500" />
         {(CATEGORY_NAMES as any)?.[item] || item} 색상 선택
       </h2>
 
-      {/* 추천 색상 */}
+      {/* 추천 색상 + 점수 변화 */}
       {recs.length > 0 && (
         <div className="mb-4">
-          <div className="text-xs font-semibold text-warm-600 tracking-wide mb-2 flex items-center gap-1">
+          <div className="text-xs font-semibold text-warm-600 dark:text-warm-400 tracking-wide mb-2 flex items-center gap-1">
             <Sparkles size={12} className="text-terra-500" /> 추천 색상
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -262,16 +267,25 @@ function StepColor({ build }: { build: BH }) {
               const c = COLORS_60[r.key]
               if (!c) return null
               const sel = currentColor === r.key
+              const delta = showDelta ? build.calcScoreDelta(item, r.key) : 0
               return (
-                <button
-                  key={r.key}
-                  onClick={() => build.selectColor(r.key)}
-                  className={`w-10 h-10 rounded-xl border-[1.5px] transition-all active:scale-90 ${
-                    sel ? 'border-terra-500 ring-2 ring-terra-300 scale-110' : 'border-warm-400'
-                  }`}
-                  style={{ background: c.hex }}
-                  title={c.name}
-                />
+                <div key={r.key} className="relative">
+                  <button
+                    onClick={() => build.selectColor(r.key)}
+                    className={`w-10 h-10 rounded-xl border-[1.5px] transition-all active:scale-90 ${
+                      sel ? 'border-terra-500 ring-2 ring-terra-300 scale-110' : 'border-warm-400'
+                    }`}
+                    style={{ background: c.hex }}
+                    title={c.name}
+                  />
+                  {showDelta && delta !== 0 && (
+                    <span className={`absolute -top-2 -right-2 text-[9px] font-bold px-1 py-0.5 rounded-full ${
+                      delta > 0 ? 'bg-green-500 text-white' : 'bg-red-400 text-white'
+                    }`}>
+                      {delta > 0 ? '+' : ''}{delta}
+                    </span>
+                  )}
+                </div>
               )
             })}
           </div>
@@ -280,7 +294,7 @@ function StepColor({ build }: { build: BH }) {
 
       {/* 전체 컬러 피커 */}
       <div className="mb-4">
-        <div className="text-xs font-semibold text-warm-600 tracking-wide mb-2">전체 색상</div>
+        <div className="text-xs font-semibold text-warm-600 dark:text-warm-400 tracking-wide mb-2">전체 색상</div>
         <ColorPicker
           inline
           selected={currentColor}
@@ -289,15 +303,26 @@ function StepColor({ build }: { build: BH }) {
         />
       </div>
 
-      {/* 선택 확인 */}
+      {/* 선택 확인 + 점수 변화 */}
       {currentColor && (
-        <div className="flex items-center gap-3 bg-terra-50 border border-terra-200 rounded-2xl p-3 mb-4">
+        <div className="flex items-center gap-3 bg-terra-50 dark:bg-terra-900/30 border border-terra-200 dark:border-terra-800 rounded-2xl p-3 mb-4">
           <div className="w-10 h-10 rounded-xl border border-warm-400" style={{ background: COLORS_60[currentColor]?.hex }} />
           <div className="flex-1">
-            <div className="text-sm font-semibold text-warm-900">{COLORS_60[currentColor]?.name}</div>
-            <div className="text-[11px] text-warm-600">{(CATEGORY_NAMES as any)?.[item]}</div>
+            <div className="text-sm font-semibold text-warm-900 dark:text-warm-100">{COLORS_60[currentColor]?.name}</div>
+            <div className="text-[11px] text-warm-600 dark:text-warm-400">{(CATEGORY_NAMES as any)?.[item]}</div>
           </div>
-          <Check size={18} className="text-terra-500" />
+          {showDelta && (() => {
+            const delta = build.calcScoreDelta(item, currentColor)
+            if (delta === 0) return <Check size={18} className="text-terra-500" />
+            return (
+              <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                delta > 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+              }`}>
+                {delta > 0 ? '+' : ''}{delta}점
+              </span>
+            )
+          })()}
+          {!showDelta && <Check size={18} className="text-terra-500" />}
         </div>
       )}
 
@@ -368,13 +393,194 @@ function StepAsk({ build }: { build: BH }) {
 }
 
 // ═══════════════════════════════════════
+// Step 5.5: 소재 선택 (fabricMode ON일 때)
+// ═══════════════════════════════════════
+function StepFabric({ build }: { build: BH }) {
+  const filledParts = Object.entries(build.state.colors).filter(([_, v]) => v)
+  const [fabrics, setFabrics] = useState<Record<string, any>>(build.state.fabrics || {})
+
+  // 현재 계절
+  const currentSeason = (() => {
+    const m = new Date().getMonth()
+    if (m >= 2 && m <= 4) return 'spring'
+    if (m >= 5 && m <= 7) return 'summer'
+    if (m >= 8 && m <= 10) return 'fall'
+    return 'winter'
+  })()
+
+  const [seasonFilter, setSeasonFilter] = useState<string | null>(currentSeason)
+
+  const handleSelect = (part: string, item: any) => {
+    setFabrics(prev => {
+      const next = { ...prev }
+      if (next[part]?.id === item.id) {
+        delete next[part]
+      } else {
+        next[part] = item
+      }
+      return next
+    })
+  }
+
+  const handleConfirm = () => {
+    build.update({ fabrics })
+    build.pushStep('result')
+  }
+
+  // 궁합 평가
+  const compatPairs = useMemo(() => evaluateFabricCombo(fabrics), [fabrics])
+  const badCount = compatPairs.filter(p => p.rating === 'bad').length
+  const greatCount = compatPairs.filter(p => p.rating === 'great').length
+
+  return (
+    <div className="animate-screen-enter">
+      <button onClick={build.goBack} className="flex items-center gap-1 text-sm text-warm-600 dark:text-warm-400 mb-4 active:opacity-70">
+        <ArrowLeft size={16} /> 뒤로
+      </button>
+
+      <h2 className="font-display text-xl font-bold text-warm-900 dark:text-warm-100 tracking-tight mb-1">소재 선택</h2>
+      <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">각 부위의 소재를 골라 궁합을 확인하세요</p>
+
+      {/* 계절 필터 */}
+      <div className="flex gap-1.5 mb-5">
+        <button
+          onClick={() => setSeasonFilter(null)}
+          className={`px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all ${
+            !seasonFilter ? 'bg-terra-500 text-white' : 'bg-warm-200 dark:bg-warm-700 text-warm-600 dark:text-warm-400'
+          }`}
+        >전체</button>
+        {Object.entries(FABRIC_SEASONS).map(([key, s]) => (
+          <button
+            key={key}
+            onClick={() => setSeasonFilter(seasonFilter === key ? null : key)}
+            className={`px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all ${
+              seasonFilter === key ? 'bg-terra-500 text-white' : 'bg-warm-200 dark:bg-warm-700 text-warm-600 dark:text-warm-400'
+            }`}
+          >{s.emoji} {s.name}</button>
+        ))}
+      </div>
+
+      {/* 부위별 소재 선택 */}
+      {filledParts.map(([part, colorKey]) => {
+        const items = FABRIC_ITEMS[part]
+        if (!items || items.length === 0) return null
+        const c = COLORS_60[colorKey!]
+        const filtered = seasonFilter ? items.filter(i => i.seasons.includes(seasonFilter)) : items
+        const selected = fabrics[part]
+
+        return (
+          <div key={part} className="mb-5">
+            <div className="flex items-center gap-2 mb-2.5">
+              {c && <span className="w-4 h-4 rounded border border-warm-400" style={{ background: c.hex }} />}
+              <span className="text-xs font-semibold text-warm-600 dark:text-warm-400 uppercase tracking-widest">{(CATEGORY_NAMES as any)?.[part]}</span>
+              {selected && <span className="text-[10px] text-terra-600 dark:text-terra-400 font-medium ml-auto">{selected.name}</span>}
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
+              {filtered.map(item => {
+                const sel = selected?.id === item.id
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleSelect(part, item)}
+                    className={`flex-shrink-0 w-[120px] border rounded-xl p-2.5 text-left transition-all active:scale-[0.97] ${
+                      sel
+                        ? 'bg-terra-50 dark:bg-terra-900/30 border-terra-400 shadow-warm'
+                        : 'bg-white dark:bg-warm-800 border-warm-400 dark:border-warm-600 shadow-warm-sm'
+                    }`}
+                  >
+                    <div className="text-lg mb-1">{item.icon}</div>
+                    <div className="text-[12px] font-semibold text-warm-900 dark:text-warm-100 leading-tight">{item.name}</div>
+                    <div className="text-[10px] text-warm-500 dark:text-warm-400 mt-0.5 leading-snug">{item.desc}</div>
+                    <div className="flex gap-0.5 mt-1.5">
+                      {item.seasons.map(s => (
+                        <span key={s} className="text-[9px]">{FABRIC_SEASONS[s]?.emoji}</span>
+                      ))}
+                    </div>
+                  </button>
+                )
+              })}
+              {filtered.length === 0 && (
+                <div className="text-[11px] text-warm-500 dark:text-warm-400 py-3">이 계절에 해당하는 소재가 없어요</div>
+              )}
+            </div>
+          </div>
+        )
+      })}
+
+      {/* 실시간 궁합 표시 */}
+      {compatPairs.length > 0 && (
+        <FabricCompatSection pairs={compatPairs} badCount={badCount} greatCount={greatCount} />
+      )}
+
+      {/* 확인 */}
+      <button
+        onClick={handleConfirm}
+        className="w-full py-3.5 bg-terra-500 text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-terra mt-3"
+      >
+        {Object.keys(fabrics).length > 0 ? '소재 궁합 확인 완료' : '소재 선택 건너뛰기'} <ArrowRight size={18} />
+      </button>
+    </div>
+  )
+}
+
+// ─── 소재 궁합 표시 공용 컴포넌트 ───
+function FabricCompatSection({ pairs, badCount, greatCount }: { pairs: any[]; badCount: number; greatCount: number }) {
+  const ratingIcons = { great: <ThumbsUp size={13} className="text-green-600" />, ok: <Minus size={13} className="text-warm-500" />, bad: <ThumbsDown size={13} className="text-red-500" /> }
+  const ratingColors = { great: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800', ok: 'bg-warm-50 dark:bg-warm-800 border-warm-300 dark:border-warm-600', bad: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' }
+  const ratingLabels = { great: '추천', ok: '무난', bad: '비추' }
+
+  return (
+    <div className="bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl p-4 shadow-warm-sm mb-4">
+      <div className="flex items-center gap-1.5 text-sm font-bold text-warm-900 dark:text-warm-100 mb-1">
+        <Scissors size={16} className="text-terra-500" /> 소재 궁합
+      </div>
+      <div className="flex gap-3 text-[11px] text-warm-600 dark:text-warm-400 mb-3">
+        {greatCount > 0 && <span className="text-green-600 dark:text-green-400 font-medium">추천 {greatCount}쌍</span>}
+        {badCount > 0 && <span className="text-red-500 dark:text-red-400 font-medium">비추 {badCount}쌍</span>}
+        {greatCount === 0 && badCount === 0 && <span>모두 무난한 조합이에요</span>}
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {pairs.map((p, idx) => (
+          <div key={idx} className={`flex items-start gap-2 border rounded-xl px-3 py-2 ${ratingColors[p.rating]}`}>
+            <div className="flex-shrink-0 mt-0.5">{ratingIcons[p.rating]}</div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-warm-800 dark:text-warm-200">
+                <span>{(CATEGORY_NAMES as any)?.[p.partA]}</span>
+                <span className="text-warm-400">×</span>
+                <span>{(CATEGORY_NAMES as any)?.[p.partB]}</span>
+                <span className={`ml-auto text-[10px] font-bold ${
+                  p.rating === 'great' ? 'text-green-600 dark:text-green-400' : p.rating === 'bad' ? 'text-red-500 dark:text-red-400' : 'text-warm-500'
+                }`}>{ratingLabels[p.rating]}</span>
+              </div>
+              <div className="text-[10px] text-warm-600 dark:text-warm-400 leading-relaxed mt-0.5">{p.reason}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════
 // Step 6: 결과
 // ═══════════════════════════════════════
 function StepResult({ build, navigate }: { build: BH, navigate: any }) {
   const score = build.getScore()
+  const evalResult = build.getEvalResult()
   const circumference = 2 * Math.PI * 52
   const offset = circumference * (1 - score / 100)
   const filledParts = Object.entries(build.state.colors).filter(([_, v]) => v)
+
+  // 점수 분해도 항목
+  const scoreItems = evalResult ? [
+    { label: '골디락스', value: evalResult.goldilocks, max: 33, desc: '2~3색 최적 법칙' },
+    { label: '비율', value: evalResult.ratio, max: 17, desc: '60-30-10 배분' },
+    { label: '조화도', value: evalResult.harmony, max: 17, desc: 'HCL 색상 조화' },
+    { label: '색온도', value: evalResult.season, max: 17, desc: '웜/쿨 일관성' },
+    { label: '밸런스', value: evalResult.balance, max: 8, desc: '명도 분포' },
+    ...(evalResult.hasPersonalColor ? [{ label: '퍼스널컬러', value: evalResult.personal, max: 17, desc: '얼굴 근처 컬러' }] : []),
+    ...(evalResult.hasBodyFit ? [{ label: '체형 맞춤', value: evalResult.bodyFit, max: 8, desc: '체형별 컬러 배치' }] : []),
+  ].filter(item => item.value > 0) : []
 
   return (
     <div className="animate-screen-enter">
@@ -413,9 +619,45 @@ function StepResult({ build, navigate }: { build: BH, navigate: any }) {
         </div>
       </div>
 
+      {/* 점수 분해도 */}
+      {scoreItems.length > 0 && (
+        <div className="bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl p-4 mb-4 shadow-warm-sm">
+          <div className="text-xs font-semibold text-warm-500 uppercase tracking-widest mb-3">점수 분석</div>
+          <div className="flex flex-col gap-2">
+            {scoreItems.map(item => (
+              <div key={item.label} className="flex items-center gap-2">
+                <span className="text-[11px] text-warm-600 dark:text-warm-400 w-16 flex-shrink-0">{item.label}</span>
+                <div className="flex-1 h-2 bg-warm-200 dark:bg-warm-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-terra-400 rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (item.value / item.max) * 100)}%` }} />
+                </div>
+                <span className="text-[11px] font-display font-bold text-warm-700 dark:text-warm-300 w-8 text-right">{Math.round(item.value)}</span>
+              </div>
+            ))}
+          </div>
+          {evalResult?.theory && Array.isArray(evalResult.theory) && (
+            <div className="mt-3 text-[11px] text-terra-600 dark:text-terra-400 font-medium">
+              💡 {evalResult.theory.join(' · ')}
+            </div>
+          )}
+          {evalResult?.feedback && typeof evalResult.feedback === 'string' && evalResult.feedback.length > 0 && (
+            <div className="mt-2 text-[11px] text-warm-600 dark:text-warm-400 leading-relaxed">
+              {evalResult.feedback.slice(0, 120)}{evalResult.feedback.length > 120 ? '...' : ''}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 소재 궁합 (fabricMode + 소재 선택됨일 때) */}
+      {build.state.fabricMode && Object.keys(build.state.fabrics || {}).length > 0 && (() => {
+        const pairs = evaluateFabricCombo(build.state.fabrics)
+        const badCount = pairs.filter(p => p.rating === 'bad').length
+        const greatCount = pairs.filter(p => p.rating === 'great').length
+        return <FabricCompatSection pairs={pairs} badCount={badCount} greatCount={greatCount} />
+      })()}
+
       {/* 색상 칩 */}
-      <div className="bg-white border border-warm-400 rounded-2xl p-4 mb-5 shadow-warm-sm">
-        <div className="flex items-center gap-1.5 text-sm font-bold text-warm-900 mb-3">
+      <div className="bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl p-4 mb-5 shadow-warm-sm">
+        <div className="flex items-center gap-1.5 text-sm font-bold text-warm-900 dark:text-warm-100 mb-3">
           <Palette size={16} className="text-terra-500" /> 색상 개선하기
         </div>
         <div className="flex gap-2 flex-wrap justify-center py-1">
@@ -479,17 +721,30 @@ function StepImprove({ build }: { build: BH }) {
   const filledParts = Object.entries(currentColors).filter(([_, v]) => v)
   const currentScore = build.getScore()
 
-  // 간이 개선안 생성: 각 부위의 색상을 하나씩 교체
+  // 실제 evaluationSystem 기반 개선안 생성: 각 부위의 색상을 하나씩 교체
   const improvements: { part: string; original: string; replacement: string; scoreDiff: number }[] = []
 
   filledParts.forEach(([part, colorKey]) => {
     if (!colorKey) return
-    // 같은 그룹에서 랜덤 대안 3개
-    const alternatives = Object.keys(COLORS_60).filter(k => k !== colorKey).slice(0, 50)
-    const picked = alternatives.sort(() => Math.random() - 0.5).slice(0, 3)
+    // 같은 색상 그룹이나 유사 색상에서 대안 후보
+    const c = COLORS_60[colorKey]
+    if (!c) return
+    const [h, ch, l] = c.hcl
+    // 유사 색상 (색상환 근처 + 명도 유사) 우선, 나머지는 랜덤
+    const candidates = Object.keys(COLORS_60)
+      .filter(k => k !== colorKey && COLORS_60[k])
+      .map(k => {
+        const tc = COLORS_60[k]
+        const [th, tch, tl] = tc.hcl
+        const hueDist = Math.min(Math.abs(h - th), 360 - Math.abs(h - th))
+        const dist = hueDist * 0.5 + Math.abs(l - tl) * 0.3 + Math.abs(ch - tch) * 0.2
+        return { key: k, dist }
+      })
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, 12)
 
-    picked.forEach(alt => {
-      const diff = Math.floor(Math.random() * 15) - 5 // -5 ~ +10
+    candidates.forEach(({ key: alt }) => {
+      const diff = build.calcScoreDelta(part, alt)
       if (diff > 0) {
         improvements.push({ part, original: colorKey, replacement: alt, scoreDiff: diff })
       }

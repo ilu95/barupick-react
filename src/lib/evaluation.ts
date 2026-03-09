@@ -5,9 +5,10 @@
 // ⚠️ 이 알고리즘의 점수 계산은 기존과 100% 동일해야 합니다.
 // ================================================================
 
-import { COLORS_60, COLORS, hcl, H, Cv, L, hex, temp, COLOR_FAMILIES, WARM_SET, COOL_SET } from './colors'
+import { COLORS_60, COLORS, hcl, H, Cv, L, hex, temp, COLOR_FAMILIES, WARM_SET, COOL_SET, getHueDiff, isNeutralColor, getToneGroup, getColorTemperature, PASTEL_COLORS, EARTH_TONE_COLORS } from './colors'
 import { PERSONAL_COLOR_12, FACE_NEAR_ITEMS } from './personalColor'
 import { BODY_GUIDE_DATA } from './bodyType'
+import { profile } from './profile'
 
 
 export const evaluationSystem = {

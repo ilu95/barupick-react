@@ -66,14 +66,14 @@ export default function OotdCalendar() {
     <div className="animate-screen-fade px-5 pt-2 pb-10">
       {/* 월 네비 */}
       <div className="flex items-center justify-between mb-5">
-        <button onClick={prevMonth} className="w-9 h-9 rounded-full bg-white border border-warm-400 flex items-center justify-center active:scale-90 transition-transform">
+        <button onClick={prevMonth} className="w-9 h-9 rounded-full bg-white dark:bg-warm-800 border border-warm-400 flex items-center justify-center active:scale-90 transition-transform">
           <ChevronLeft size={18} />
         </button>
         <div className="text-center">
           <div className="font-display text-lg font-bold text-warm-900">{monthLabel}</div>
           <div className="text-[11px] text-warm-600">{daysWithRecords}일 기록 · {monthRecords.length}개 코디</div>
         </div>
-        <button onClick={nextMonth} className="w-9 h-9 rounded-full bg-white border border-warm-400 flex items-center justify-center active:scale-90 transition-transform">
+        <button onClick={nextMonth} className="w-9 h-9 rounded-full bg-white dark:bg-warm-800 border border-warm-400 flex items-center justify-center active:scale-90 transition-transform">
           <ChevronRight size={18} />
         </button>
       </div>
@@ -101,7 +101,7 @@ export default function OotdCalendar() {
               onClick={() => hasRecords && navigate(`/closet/ootd/${day.dateStr}`)}
               className={`aspect-square rounded-xl flex flex-col items-center justify-center transition-all ${
                 day.isToday ? 'bg-terra-100 border border-terra-300' :
-                hasRecords ? 'bg-white border border-warm-400 shadow-warm-sm active:scale-95' :
+                hasRecords ? 'bg-white dark:bg-warm-800 border border-warm-400 shadow-warm-sm active:scale-95' :
                 'bg-warm-100'
               }`}
             >

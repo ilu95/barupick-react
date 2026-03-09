@@ -6,6 +6,9 @@ import MannequinSVG from '@/components/mannequin/MannequinSVG'
 import { COLORS_60 } from '@/lib/colors'
 import { LAYER_LEVELS, STYLE_GUIDE } from '@/lib/styles'
 import { CATEGORY_NAMES } from '@/lib/categories'
+import { evaluationSystem } from '@/lib/evaluation'
+import { profile } from '@/lib/profile'
+import { getDynamicCombos } from '@/lib/recommend'
 
 export default function ClosetCoord() {
   const navigate = useNavigate()
@@ -17,60 +20,74 @@ export default function ClosetCoord() {
     try { return JSON.parse(localStorage.getItem('sp_wardrobe') || '[]') } catch { return [] }
   }, [])
 
-  // 카테고리별 정리 (wardrobe 아이템의 category는 한글)
+  // 카테고리별 정리 (wardrobe 아이템의 category는 한글 또는 영문)
   const catMap: Record<string, string> = { '상의': 'top', '하의': 'bottom', '아우터': 'outer', '미들웨어': 'middleware', '신발': 'shoes', '가방': 'bag', '기타': 'etc' }
+  // colorKey 호환
+  const getColor = (item: any) => item.color || item.colorKey || null
   const byCat = useMemo(() => {
     const map: Record<string, any[]> = {}
     items.forEach((i: any) => {
       const eng = catMap[i.category] || i.category
       if (!map[eng]) map[eng] = []
-      map[eng].push(i)
+      map[eng].push({ ...i, color: getColor(i) })
     })
     return map
   }, [items])
 
   const catOrder = ['outer', 'middleware', 'top', 'bottom', 'shoes']
 
-  // 코디 생성
+  // 코디 생성 — 옷장 아이템을 핀으로 잡고 recommend 엔진이 나머지 채움
   const generate = (lt: string) => {
     const layer = LAYER_LEVELS[lt]
     if (!layer) return
     const partKeys = layer.partKeys || ['top', 'bottom', 'shoes']
-    const combos: any[] = []
 
-    // 간단한 조합 생성: 각 파트에서 랜덤 선택 (8개)
-    for (let i = 0; i < 8; i++) {
-      const outfit: Record<string, string> = {}
-      const outfitHex: Record<string, string> = {}
-      let score = 60
-
-      partKeys.forEach((pk: string) => {
-        const pool = byCat[pk]
-        if (pool && pool.length > 0) {
-          const item = pool[Math.floor(Math.random() * pool.length)]
-          const c = COLORS_60[item.color]
-          if (c) {
-            outfit[pk] = item.color
-            outfitHex[pk] = c.hex
-            score += 5
-          }
-        } else {
-          // 없는 부위: 무채색 추천
-          const neutrals = ['white', 'black', 'gray', 'charcoal', 'navy', 'beige', 'cream']
-          const pick = neutrals[Math.floor(Math.random() * neutrals.length)]
-          const c = COLORS_60[pick]
-          if (c) {
-            outfit[pk] = pick
-            outfitHex[pk] = c.hex
-          }
-        }
+    // 옷장 아이템에서 핀 조합 생성 (카테고리당 최대 3개, 조합 최대 8개)
+    let pinCombos: Record<string, string>[] = [{}]
+    partKeys.forEach(pk => {
+      const pool = byCat[pk]
+      if (!pool || pool.length === 0) return
+      const itemsToTry = pool.slice(0, 3)
+      const newCombos: Record<string, string>[] = []
+      pinCombos.forEach(existing => {
+        itemsToTry.forEach(item => {
+          if (item.color) newCombos.push({ ...existing, [pk]: item.color })
+        })
       })
+      pinCombos = newCombos
+      if (pinCombos.length > 8) {
+        pinCombos.sort(() => Math.random() - 0.5)
+        pinCombos = pinCombos.slice(0, 8)
+      }
+    })
 
-      combos.push({ outfit, outfitHex, score: Math.min(95, score + Math.floor(Math.random() * 15)) })
-    }
+    const styles = ['casual', 'minimal', 'normcore', 'preppy', 'amekaji']
+    let allResults: any[] = []
 
-    combos.sort((a, b) => b.score - a.score)
-    setResults(combos)
+    pinCombos.forEach(pinned => {
+      const style = styles[Math.floor(Math.random() * styles.length)]
+      try {
+        const engineResults = getDynamicCombos(style, lt, 6, pinned)
+        engineResults.forEach(r => {
+          const outfitHex: Record<string, string> = {}
+          Object.entries(r.outfit).forEach(([k, v]) => {
+            if (v) { const c = COLORS_60[v]; if (c) outfitHex[k] = c.hex }
+          })
+          allResults.push({ outfit: r.outfit, outfitHex, score: r.score, name: r.name, tip: r.tip, tags: r.tags })
+        })
+      } catch {}
+    })
+
+    // 중복 제거 + 정렬
+    const seen = new Set<string>()
+    const deduped = allResults.filter(r => {
+      const key = partKeys.map(pk => r.outfit[pk] || '').join('/')
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    deduped.sort((a, b) => b.score - a.score)
+    setResults(deduped.slice(0, 20))
   }
 
   if (items.length === 0) {

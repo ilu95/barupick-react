@@ -1,9 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Wand2, Palette, CloudSun, Bookmark, Scissors, Ruler, HelpCircle, ChevronRight, Flame, Calendar, Sparkles, Download, X } from 'lucide-react'
+import { Wand2, Palette, CloudSun, Bookmark, Scissors, Ruler, HelpCircle, ChevronRight, Flame, Calendar, Sparkles, Download, X, Droplets, Wind } from 'lucide-react'
+import MannequinSVG from '@/components/mannequin/MannequinSVG'
+import { COLORS_60 } from '@/lib/colors'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePWA } from '@/hooks/usePWA'
-import { useWeather, weatherEmoji, getLayerAdvice } from '@/hooks/useWeather'
+import { useWeather, weatherEmoji, weatherText, getLayerAdvice } from '@/hooks/useWeather'
 
 export default function Home() {
   const navigate = useNavigate()
@@ -24,21 +26,98 @@ export default function Home() {
   const userName = profile?.nickname || ''
   const greetingText = userName ? `${greeting}, ${userName}님` : greeting
 
+  // 날씨 기반 배경 그라데이션
+  const weatherGradient = weather ? (
+    weather.code === 0 ? 'from-amber-50 to-sky-50' :
+    weather.code <= 3 ? 'from-sky-50 to-blue-50' :
+    weather.code <= 48 ? 'from-gray-100 to-slate-100' :
+    weather.code <= 67 ? 'from-blue-50 to-indigo-50' :
+    'from-slate-100 to-blue-100'
+  ) : 'from-warm-100 to-warm-50'
+
+  const advice = weather ? getLayerAdvice(weather.feels) : null
+
+  // 최근 OOTD 기록
+  const recentOotd = useMemo(() => {
+    try {
+      const records = JSON.parse(localStorage.getItem('sp_ootd_records') || '[]')
+      return records[0] || null
+    } catch { return null }
+  }, [])
+
   return (
     <div className="animate-screen-fade px-5 pt-[18px] pb-10">
-      {/* 인사 + 칩 */}
-      <div className="pb-5">
-        <h1 className="font-display text-[clamp(22px,5.5vw,28px)] font-bold tracking-tight text-warm-900 leading-tight mb-3">
+      {/* 인사 */}
+      <div className="pb-4">
+        <h1 className="font-display text-[clamp(22px,5.5vw,28px)] font-bold tracking-tight text-warm-900 dark:text-warm-100 leading-tight mb-4">
           {greetingText}
         </h1>
-        <div className="flex gap-2 flex-wrap">
-          <button onClick={() => navigate('/home/weather')} className="inline-flex items-center gap-1.5 bg-white border border-warm-400 rounded-full px-3.5 py-2 text-sm text-warm-600 shadow-warm-sm active:scale-[0.97] transition-all">
-            <CloudSun size={16} /> {weather ? `${weatherEmoji(weather.code)} ${weather.temp}°C · ${getLayerAdvice(weather.feels).desc}` : wLoading ? '날씨 불러오는 중...' : '위치 허용 필요'}
+
+        {/* 날씨 카드 */}
+        {weather ? (
+          <button
+            onClick={() => navigate('/home/weather')}
+            className={`w-full bg-gradient-to-br ${weatherGradient} dark:from-warm-800 dark:to-warm-700 border border-warm-300 dark:border-warm-600 rounded-2xl p-4 text-left shadow-warm-sm active:scale-[0.98] transition-all mb-3`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">{weatherEmoji(weather.code)}</span>
+                <div>
+                  <span className="font-display text-2xl font-bold text-warm-900 dark:text-warm-100">{weather.temp}°</span>
+                  <span className="text-xs text-warm-500 dark:text-warm-400 ml-1.5">체감 {weather.feels}°</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 text-[11px] text-warm-500 dark:text-warm-400">
+                <span className="flex items-center gap-0.5"><Droplets size={11} />{weather.humidity}%</span>
+                <span className="flex items-center gap-0.5"><Wind size={11} />{weather.wind}km/h</span>
+              </div>
+            </div>
+            {advice && (
+              <div className="flex items-center gap-2 bg-white/60 dark:bg-warm-900/40 rounded-xl px-3 py-2">
+                <span className="text-sm">{advice.emoji}</span>
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs font-semibold text-warm-800 dark:text-warm-200">{advice.title}</span>
+                  <span className="text-[11px] text-warm-500 dark:text-warm-400 ml-1.5">{advice.desc}</span>
+                </div>
+                <ChevronRight size={14} className="text-warm-400 flex-shrink-0" />
+              </div>
+            )}
           </button>
-          <button onClick={() => navigate('/record')} className="inline-flex items-center gap-1.5 bg-white border border-warm-400 rounded-full px-3.5 py-2 text-sm text-warm-600 shadow-warm-sm active:scale-[0.97] transition-all">
+        ) : (
+          <button onClick={() => navigate('/home/weather')} className="w-full flex items-center gap-2 bg-warm-100 dark:bg-warm-800 border border-warm-300 dark:border-warm-600 rounded-2xl px-4 py-3.5 text-sm text-warm-500 dark:text-warm-400 shadow-warm-sm active:scale-[0.98] transition-all mb-3">
+            <CloudSun size={16} /> {wLoading ? '날씨 불러오는 중...' : '위치 허용하면 날씨 추천을 받을 수 있어요'}
+          </button>
+        )}
+
+        {/* 최근 OOTD or 기록 유도 */}
+        {recentOotd ? (() => {
+          const outfitHex: Record<string, string> = {}
+          Object.entries(recentOotd.colors || {}).forEach(([k, v]) => {
+            if (v) { const c = COLORS_60[v as string]; if (c) outfitHex[k] = c.hex }
+          })
+          const d = new Date(recentOotd.date)
+          const dayLabel = d.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
+          return (
+            <button onClick={() => navigate(`/closet/ootd/${recentOotd.date}?id=${recentOotd.id}`)} className="w-full flex items-center gap-3 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl px-4 py-3 shadow-warm-sm active:scale-[0.98] transition-all">
+              <MannequinSVG outfit={outfitHex} size={44} />
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-semibold text-warm-900 dark:text-warm-100">최근 기록 · {dayLabel}</div>
+                <div className="text-[11px] text-warm-500 dark:text-warm-400 mt-0.5">{recentOotd.score}점{recentOotd.situation ? ` · ${recentOotd.situation}` : ''}</div>
+              </div>
+              <div className="flex gap-1">
+                {Object.values(recentOotd.colors || {}).filter(Boolean).slice(0, 4).map((ck, i) => {
+                  const c = COLORS_60[ck as string]
+                  return c ? <div key={i} className="w-3.5 h-3.5 rounded-full border border-warm-300" style={{ background: c.hex }} /> : null
+                })}
+              </div>
+              <ChevronRight size={14} className="text-warm-400 flex-shrink-0" />
+            </button>
+          )
+        })() : (
+          <button onClick={() => navigate('/record')} className="inline-flex items-center gap-1.5 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-full px-3.5 py-2 text-sm text-warm-600 dark:text-warm-400 shadow-warm-sm active:scale-[0.97] transition-all">
             <Calendar size={16} /> 오늘 첫 기록을 남겨보세요
           </button>
-        </div>
+        )}
       </div>
 
       {/* 퍼스널컬러 미설정 배너 */}

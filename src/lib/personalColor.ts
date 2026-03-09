@@ -230,7 +230,7 @@ export const PERSONAL_COLOR_12: Record<string, any> = {
   }
         };
 
-        const PERSONAL_COLOR_DIAGNOSIS = {
+        export const PERSONAL_COLOR_DIAGNOSIS = {
   questions: [
       {
           id: 1,

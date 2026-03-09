@@ -1,15 +1,8 @@
 // @ts-nocheck
-import { useState, useCallback } from 'react'
-import { COLORS_60 } from '@/lib/colors'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { MOOD_GROUPS, LAYER_LEVELS, STYLE_GUIDE } from '@/lib/styles'
-import { STYLE_MOODS } from '@/lib/styleMoods'
-import { PERSONAL_COLOR_12, FACE_NEAR_ITEMS } from '@/lib/personalColor'
-import { BODY_GUIDE_DATA } from '@/lib/bodyType'
-import { profile } from '@/lib/profile'
-
-// @ts-nocheck
-// 추천 엔진 함수 import — recommend.ts에서 export 필요
-// 현재는 인라인으로 처리 (추후 리팩토링)
+import { getDynamicCombos } from '@/lib/recommend'
 
 export type RecStep = 'mood' | 'style' | 'layer' | 'garment' | 'pin' | 'results' | 'detail'
 
@@ -20,6 +13,7 @@ export interface ComboResult {
   tags?: string[]
   tip?: string
   style?: string
+  evalResult?: any
 }
 
 export interface RecState {
@@ -48,10 +42,35 @@ const initialState: RecState = {
   fitMode: false,
 }
 
+// 스타일 → 무드그룹 역 매핑
+function findMoodForStyle(style: string): string | null {
+  for (const [moodKey, group] of Object.entries(MOOD_GROUPS)) {
+    if (group.styles.includes(style)) return moodKey
+  }
+  return null
+}
+
 export function useRecommend() {
+  const [searchParams] = useSearchParams()
   const [step, setStep] = useState<RecStep>('mood')
   const [state, setState] = useState<RecState>(initialState)
   const [history, setHistory] = useState<RecStep[]>([])
+  const initRef = useRef(false)
+
+  // URL에서 style 파라미터 읽어서 해당 스타일로 바로 진입
+  useEffect(() => {
+    if (initRef.current) return
+    const styleParam = searchParams.get('style')
+    if (styleParam && STYLE_GUIDE[styleParam]) {
+      initRef.current = true
+      const mood = findMoodForStyle(styleParam)
+      const newState = { ...initialState, mood, style: styleParam }
+      // 바로 레이어 선택 단계로
+      setState(newState)
+      setStep('layer')
+      setHistory(['mood', 'style'])
+    }
+  }, [searchParams])
 
   const pushStep = useCallback((next: RecStep) => {
     setHistory(prev => [...prev, step])
@@ -207,68 +226,26 @@ export function useRecommend() {
   }
 }
 
-// ─── 추천 생성 함수 (기존 generateRecommendations 포팅) ───
+// ─── 추천 생성 함수 (recommend.ts 엔진 연결) ───
 function generateRecommendations(s: RecState): ComboResult[] {
   const { mood, style, layerType, pinned } = s
   let results: ComboResult[] = []
 
   try {
-    // recommend.ts의 함수를 직접 호출하는 대신,
-    // 여기서 간이 버전으로 구현 (추후 recommend.ts export 연결)
-    // 실제 프로덕션에서는 recommend.ts의 generateOutfitsWithPins, outfitsToComboFormat 사용
-
     if (style) {
-      results = generateSimpleResults(style, 20, layerType, pinned)
+      // 특정 스타일 지정 → 해당 스타일로 생성
+      results = getDynamicCombos(style, layerType, 30, pinned)
     } else if (mood && MOOD_GROUPS[mood]) {
+      // 무드만 지정 → 무드 내 모든 스타일에서 생성
       const styles = MOOD_GROUPS[mood].styles || []
       styles.forEach((st: string) => {
-        results.push(...generateSimpleResults(st, 6, layerType, pinned))
+        results.push(...getDynamicCombos(st, layerType, 8, pinned))
       })
       results.sort((a, b) => b.score - a.score)
     } else {
+      // 전체 → 모든 스타일에서 소량씩
       Object.keys(STYLE_GUIDE).forEach(st => {
-        results.push(...generateSimpleResults(st, 3, layerType, pinned))
-      })
-      results.sort((a, b) => b.score - a.score)
-    }
-
-    // 맞춤 적용
-    const fitMode = s.fitMode || profile.getFitMode()
-    const pc = profile.getPersonalColor()
-    const bt = profile.getBodyType()
-
-    if (fitMode && (pc || bt)) {
-      results.forEach(r => {
-        let bonus = 0
-        if (pc) {
-          const pcData = (PERSONAL_COLOR_12 as any)[pc]
-          if (pcData) {
-            FACE_NEAR_ITEMS.forEach(item => {
-              if (r.outfit[item]) {
-                if ((pcData.bestColors || []).includes(r.outfit[item])) bonus += 5
-                if ((pcData.avoidColors || []).includes(r.outfit[item])) bonus -= 10
-              }
-            })
-          }
-        }
-        if (bt) {
-          const btData = (BODY_GUIDE_DATA as any)[bt]
-          if (btData?.colorRules) {
-            Object.entries(r.outfit).forEach(([part, colorKey]) => {
-              if (!colorKey) return
-              const rule = btData.colorRules[part]
-              if (!rule || rule === 'any') return
-              const c = COLORS_60[colorKey as string]
-              if (!c) return
-              const lightness = c.hcl[2]
-              if (rule === 'light' && lightness >= 55) bonus += 3
-              else if (rule === 'dark' && lightness <= 45) bonus += 3
-              else if (rule === 'light' && lightness < 35) bonus -= 5
-              else if (rule === 'dark' && lightness > 70) bonus -= 5
-            })
-          }
-        }
-        r.score += bonus
+        results.push(...getDynamicCombos(st, layerType, 4, pinned))
       })
       results.sort((a, b) => b.score - a.score)
     }
@@ -277,57 +254,4 @@ function generateRecommendations(s: RecState): ComboResult[] {
   }
 
   return results.slice(0, 30)
-}
-
-// 간이 코디 생성 (recommend.ts 연결 전 임시)
-function generateSimpleResults(style: string, count: number, layerType: string, pinned: Record<string, string>): ComboResult[] {
-  const moods = (STYLE_MOODS as any)[style]
-  if (!moods) return []
-
-  const results: ComboResult[] = []
-  const layer = LAYER_LEVELS[layerType] || LAYER_LEVELS['basic']
-  const partKeys = layer?.partKeys || ['top', 'bottom', 'shoes']
-  const styleName = STYLE_GUIDE[style]?.name || style
-
-  // 각 무드에서 색상 조합 생성
-  const moodKeys = Object.keys(moods)
-
-  for (let i = 0; i < count && i < 50; i++) {
-    const moodKey = moodKeys[i % moodKeys.length]
-    const moodData = moods[moodKey]
-    if (!moodData) continue
-
-    const outfit: Record<string, string> = {}
-    let score = 60 + Math.floor(Math.random() * 30) // 60~89
-
-    partKeys.forEach((pk: string) => {
-      if (pinned[pk]) {
-        outfit[pk] = pinned[pk]
-      } else {
-        // 무드 데이터에서 해당 파트의 색상 풀 가져오기
-        const pool = moodData[pk] || moodData.top || Object.keys(COLORS_60).slice(0, 15)
-        if (Array.isArray(pool) && pool.length > 0) {
-          outfit[pk] = pool[Math.floor(Math.random() * pool.length)]
-        }
-      }
-    })
-
-    // 빈 파트 기본값
-    if (!outfit.top) outfit.top = 'white'
-    if (!outfit.bottom) outfit.bottom = 'navy'
-    if (!outfit.shoes) outfit.shoes = 'brown'
-
-    results.push({
-      outfit,
-      name: styleName,
-      score,
-      style,
-      tags: [moodKey],
-      tip: undefined,
-    })
-  }
-
-  // 점수순 정렬
-  results.sort((a, b) => b.score - a.score)
-  return results
 }

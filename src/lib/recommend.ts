@@ -5,11 +5,13 @@
 // ⚠️ 추천 결과가 기존과 동일하게 나와야 합니다.
 // ================================================================
 
-import { COLORS_60, COLORS, hcl, H, Cv, L, hex, temp, COLOR_FAMILIES, WARM_SET, COOL_SET } from './colors'
+import { COLORS_60, COLORS, hcl, H, Cv, L, hex, temp, COLOR_FAMILIES, WARM_SET, COOL_SET, getHueDiff, isNeutralColor, getToneGroup, getColorTemperature, PASTEL_COLORS, EARTH_TONE_COLORS } from './colors'
 import { STYLE_MOODS } from './styleMoods'
 import { STYLE_GUIDE, LAYER_LEVELS } from './styles'
 import { PERSONAL_COLOR_12, FACE_NEAR_ITEMS } from './personalColor'
 import { BODY_GUIDE_DATA } from './bodyType'
+import { evaluationSystem } from './evaluation'
+import { profile } from './profile'
 
 
 const STW = {
@@ -1175,8 +1177,8 @@ export function outfitsToComboFormat(outfits, style, layerType) {
         var outfit = {};
         ld.partKeys.forEach(function (k) { outfit[k] = o[k]; });
         // evaluationSystem 점수로 통일 (카드/상세 동일)
-        var pc = typeof profile !== 'undefined' ? profile.getPersonalColor() : null;
-        var evalResult = (typeof evaluationSystem !== 'undefined') ? evaluationSystem.evaluate(outfit, pc) : null;
+        var pc = profile.getPersonalColor();
+        var evalResult = evaluationSystem.evaluate(outfit, pc);
         var finalScore = evalResult ? evalResult.total : (o.score ? o.score.total : 0);
         return {
             id: style + '_' + layerType + '_' + String(i + 1).padStart(2, '0'),
@@ -1184,7 +1186,8 @@ export function outfitsToComboFormat(outfits, style, layerType) {
             outfit: outfit,
             tags: [TECH_TAG_MAP[o.technique] || o.technique],
             tip: generateTip(o, style, layerType),
-            score: finalScore
+            score: finalScore,
+            evalResult: evalResult || null,
         };
     });
 }
@@ -1263,54 +1266,7 @@ export const AVOID_COMBOS = {
     'brown': ['dark_brown', 'chocolate', 'espresso'],
 };
 
-// 파스텔 색상 리스트
-export const PASTEL_COLORS = [
-    'pastel_pink', 'pastel_blue', 'pastel_green', 'pastel_yellow', 'pastel_purple',
-    'pastel_mint', 'pastel_peach', 'pastel_lavender', 'pastel_coral', 'pastel_sky',
-    'pastel_lilac', 'pastel_sage', 'pastel_lemon', 'pastel_rose', 'pastel_aqua'
-];
-
-// 어스톤 색상 리스트
-export const EARTH_TONE_COLORS = [
-    'brown', 'camel', 'olive', 'khaki', 'taupe', 'beige', 'cream', 'ivory',
-    'dark_brown', 'dark_olive', 'chocolate', 'espresso'
-];
-
-// 헬퍼 함수들
-export function getHueDiff(h1, h2) {
-    let diff = Math.abs(h1 - h2);
-    if (diff > 180) diff = 360 - diff;
-    return diff;
-}
-
-export function isNeutralColor(chroma) {
-    return chroma <= 12;
-}
-
-export function getToneGroup(h, c, l) {
-    if (c <= 12) return 'neutral';
-    if (l <= 35) return 'deep';
-    if (l >= 75) return 'light';
-    if (c >= 60) return 'bright';
-    return 'muted';
-}
-
-export function getColorTemperature(h, c, l) {
-    if (c <= 12) return { temp: 'neutral', score: 0 };
-    let warmScore = 0;
-    if ((h >= 0 && h <= 70) || (h >= 320 && h <= 360)) {
-        const adjustedH = h >= 320 ? h - 360 : h;
-        warmScore = 1.0 - Math.abs(adjustedH - 30) / 70;
-    } else if (h >= 200 && h <= 280) {
-        warmScore = -1.0 + Math.abs(h - 240) / 80;
-    }
-    if (c < 30) warmScore *= 0.5;
-    let temp;
-    if (warmScore > 0.3) temp = 'warm';
-    else if (warmScore < -0.3) temp = 'cool';
-    else temp = 'neutral';
-    return { temp, score: warmScore };
-}
+// 파스텔, 어스톤, 헬퍼함수는 colors.ts에서 import
 
 export function calculateHarmonyV6(baseKey, targetKey) {
     const base = COLORS_60[baseKey];

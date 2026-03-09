@@ -5,7 +5,7 @@
 // ================================================================
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BarChart3, Award, Palette, Target, GraduationCap, ScanLine, Star, ChevronRight, FileText, TrendingUp, Eye, Heart, Bookmark } from 'lucide-react'
+import { BarChart3, Award, Palette, Target, GraduationCap, ScanLine, Star, ChevronRight, FileText, TrendingUp, Eye, Heart, Bookmark, ArrowLeft, Check, Gift, Trophy } from 'lucide-react'
 import MannequinSVG from '@/components/mannequin/MannequinSVG'
 import { COLORS_60 } from '@/lib/colors'
 import { supabase } from '@/lib/supabase'
@@ -128,28 +128,101 @@ export function ColorPattern() {
 
 // ─── 주간 챌린지 ───
 export function Challenges() {
-  // @ts-ignore
-  const challenges = gamification.getWeeklyChallenges ? gamification.getWeeklyChallenges() : []
+  const navigate = useNavigate()
+  const [challenges, setChallenges] = useState<any[]>([])
+  const [claimedMsg, setClaimedMsg] = useState('')
+
+  useEffect(() => {
+    try { setChallenges(gamification.getWeeklyChallenges()) } catch { setChallenges([]) }
+  }, [])
+
+  const reload = () => {
+    try { setChallenges(gamification.getWeeklyChallenges()) } catch {}
+  }
+
+  const handleClaim = (ch: any) => {
+    if (!ch.completed || ch.claimed) return
+    const ok = gamification.claimChallenge(ch.cKey)
+    if (ok) {
+      setClaimedMsg(`${ch.name} 보상 획득! +${20}XP`)
+      // XP 추가
+      try {
+        const gd = JSON.parse(localStorage.getItem('sp_gamification') || '{}')
+        gd.totalXp = (gd.totalXp || 0) + 20
+        localStorage.setItem('sp_gamification', JSON.stringify(gd))
+      } catch {}
+      reload()
+      setTimeout(() => setClaimedMsg(''), 2500)
+    }
+  }
+
+  const completedCount = challenges.filter(c => c.completed).length
 
   return (
     <div className="animate-screen-fade px-5 pt-2 pb-10">
-      <h2 className="font-display text-xl font-bold text-warm-900 tracking-tight mb-1">주간 챌린지</h2>
-      <p className="text-sm text-warm-600 mb-5">{challenges.filter((c: any) => c.completed).length}/{challenges.length}개 완료</p>
+      <h2 className="font-display text-xl font-bold text-warm-900 dark:text-warm-100 tracking-tight mb-1">주간 챌린지</h2>
+      <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">{completedCount}/{challenges.length}개 완료</p>
+
+      {claimedMsg && (
+        <div className="mb-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-4 py-2.5 text-sm font-medium text-green-700 dark:text-green-400 animate-screen-fade">
+          🎉 {claimedMsg}
+        </div>
+      )}
+
+      {/* 전체 진행률 */}
+      <div className="bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl p-4 mb-5 shadow-warm-sm">
+        <div className="flex justify-between text-xs text-warm-600 dark:text-warm-400 mb-2">
+          <span>이번 주 진행률</span>
+          <span className="font-display font-bold">{completedCount}/{challenges.length}</span>
+        </div>
+        <div className="h-2.5 bg-warm-200 dark:bg-warm-700 rounded-full overflow-hidden">
+          <div className="h-full bg-terra-500 rounded-full transition-all duration-500" style={{ width: `${challenges.length > 0 ? (completedCount / challenges.length) * 100 : 0}%` }} />
+        </div>
+      </div>
+
       {challenges.length > 0 ? (
         <div className="flex flex-col gap-2.5">
-          {challenges.map((ch: any, idx: number) => (
-            <div key={idx} className={`bg-white border rounded-2xl p-4 shadow-warm-sm ${ch.completed ? 'border-sage' : 'border-warm-400'}`}>
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${ch.completed ? 'bg-sage/20' : 'bg-warm-200'}`}>
-                  <Target size={20} className={ch.completed ? 'text-sage' : 'text-warm-600'} />
+          {challenges.map((ch: any, idx: number) => {
+            const pct = ch.target > 0 ? Math.round((ch.progress / ch.target) * 100) : 0
+            return (
+              <div key={idx} className={`bg-white dark:bg-warm-800 border rounded-2xl p-4 shadow-warm-sm transition-all ${ch.completed ? 'border-green-300 dark:border-green-800' : 'border-warm-400 dark:border-warm-600'}`}>
+                <div className="flex items-center gap-3 mb-2.5">
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl flex-shrink-0 ${ch.completed ? 'bg-green-100 dark:bg-green-900/30' : 'bg-warm-200 dark:bg-warm-700'}`}>
+                    {ch.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-warm-900 dark:text-warm-100">{ch.name}</div>
+                    <div className="text-[11px] text-warm-500 dark:text-warm-400 mt-0.5">{ch.desc}</div>
+                  </div>
+                  <span className="text-xs font-display font-bold text-warm-600 dark:text-warm-400 flex-shrink-0">{ch.progress}/{ch.target}</span>
                 </div>
-                <div className="flex-1"><div className="text-sm font-semibold text-warm-900">{ch.title || '챌린지'}</div><div className="text-[11px] text-warm-500 mt-0.5">{ch.description || ''}</div></div>
-                {ch.completed ? <span className="text-xs font-bold text-sage">완료 ✓</span> : <span className="text-xs text-warm-500">{ch.progress || 0}/{ch.goal || 1}</span>}
+                {/* 진행률 바 */}
+                <div className="h-2 bg-warm-200 dark:bg-warm-700 rounded-full overflow-hidden mb-2">
+                  <div className={`h-full rounded-full transition-all duration-500 ${ch.completed ? 'bg-green-500' : 'bg-terra-400'}`} style={{ width: `${Math.min(100, pct)}%` }} />
+                </div>
+                {/* 보상 버튼 */}
+                {ch.completed && !ch.claimed && (
+                  <button onClick={() => handleClaim(ch)} className="w-full py-2.5 bg-terra-500 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all shadow-terra">
+                    <Gift size={14} /> 보상 받기 (+20 XP)
+                  </button>
+                )}
+                {ch.claimed && (
+                  <div className="text-center text-[11px] text-green-600 dark:text-green-400 font-medium py-1">✓ 보상 수령 완료</div>
+                )}
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
-      ) : <div className="text-center py-16"><Target size={40} className="text-warm-400 mx-auto mb-3" /><div className="text-sm text-warm-600">이번 주 챌린지가 곧 시작돼요</div></div>}
+      ) : (
+        <div className="text-center py-16">
+          <Target size={40} className="text-warm-400 mx-auto mb-3" />
+          <div className="text-sm text-warm-600 dark:text-warm-400">이번 주 챌린지를 불러올 수 없어요</div>
+        </div>
+      )}
+
+      <button onClick={() => navigate('/record')} className="w-full py-3.5 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 text-warm-800 dark:text-warm-200 rounded-2xl font-medium text-sm flex items-center justify-center gap-2 mt-5 active:scale-[0.98] transition-all">
+        OOTD 기록하러 가기
+      </button>
     </div>
   )
 }
@@ -157,20 +230,169 @@ export function Challenges() {
 // ─── 칭호 시험 ───
 export function TitleExam() {
   const navigate = useNavigate()
+  const [step, setStep] = useState<'list' | 'play' | 'result'>('list')
+  const [examId, setExamId] = useState<string | null>(null)
+  const [qStep, setQStep] = useState(0)
+  const [answers, setAnswers] = useState<number[]>([])
+  const [score, setScore] = useState(0)
+  const [passed, setPassed] = useState(false)
+
+  const exams = gamification.TITLE_EXAMS || []
+  const results = gamification.getTitleResults?.() || []
+
+  const startExam = (id: string) => {
+    setExamId(id)
+    setQStep(0)
+    setAnswers([])
+    setStep('play')
+  }
+
+  const answerQuestion = (ansIdx: number) => {
+    const exam = exams.find(e => e.id === examId)
+    if (!exam) return
+    const newAnswers = [...answers, ansIdx]
+    setAnswers(newAnswers)
+
+    if (qStep < exam.questions.length - 1) {
+      setQStep(qStep + 1)
+    } else {
+      // 채점
+      let sc = 0
+      exam.questions.forEach((q, i) => { if (newAnswers[i] === q.ans) sc++ })
+      const pass = sc >= exam.minScore
+      setScore(sc)
+      setPassed(pass)
+      gamification.saveTitleResult(exam.id, sc, pass)
+      setStep('result')
+    }
+  }
+
+  // 1단계: 시험 목록
+  if (step === 'list') {
+    return (
+      <div className="animate-screen-fade px-5 pt-2 pb-10">
+        <h2 className="font-display text-xl font-bold text-warm-900 dark:text-warm-100 tracking-tight mb-1">칭호 시험</h2>
+        <p className="text-sm text-warm-600 dark:text-warm-400 mb-5">컬러 지식을 테스트하고 칭호를 획득하세요</p>
+
+        <div className="flex flex-col gap-2.5">
+          {exams.map((exam) => {
+            const prev = results.find(r => r.id === exam.id)
+            return (
+              <button key={exam.id} onClick={() => startExam(exam.id)} className="bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl p-4 shadow-warm-sm text-left active:scale-[0.98] transition-all">
+                <div className="flex items-center gap-3">
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl flex-shrink-0 ${prev?.passed ? 'bg-green-100 dark:bg-green-900/30' : 'bg-terra-100 dark:bg-terra-900/30'}`}>
+                    {exam.icon}
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold text-warm-900 dark:text-warm-100">{exam.name}</div>
+                    <div className="text-[11px] text-warm-500 dark:text-warm-400 mt-0.5">{exam.desc} · {exam.questions.length}문제 · {exam.minScore}점 이상 합격</div>
+                    {prev && (
+                      <div className={`text-[10px] font-medium mt-1 ${prev.passed ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                        {prev.passed ? `✓ 합격 (${prev.score}/${exam.questions.length})` : `✕ 불합격 (${prev.score}/${exam.questions.length}) — 재도전 가능`}
+                      </div>
+                    )}
+                  </div>
+                  <ChevronRight size={16} className="text-warm-400 flex-shrink-0" />
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  // 2단계: 퀴즈 플레이
+  if (step === 'play') {
+    const exam = exams.find(e => e.id === examId)
+    if (!exam) return null
+    const q = exam.questions[qStep]
+    const progress = ((qStep + 1) / exam.questions.length) * 100
+
+    return (
+      <div className="animate-screen-enter px-5 pt-2 pb-10">
+        <button onClick={() => setStep('list')} className="flex items-center gap-1 text-sm text-warm-600 dark:text-warm-400 mb-4 active:opacity-70">
+          <ArrowLeft size={16} /> 시험 목록
+        </button>
+
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-sm font-semibold text-warm-700 dark:text-warm-300">{exam.icon} {exam.name}</span>
+          <span className="text-sm font-display font-bold text-terra-600 dark:text-terra-400">{qStep + 1} / {exam.questions.length}</span>
+        </div>
+
+        <div className="h-2 bg-warm-300 dark:bg-warm-700 rounded-full overflow-hidden mb-6">
+          <div className="h-full bg-terra-500 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+        </div>
+
+        <div className="bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl p-5 mb-5 shadow-warm-sm">
+          <div className="text-base font-semibold text-warm-900 dark:text-warm-100 leading-relaxed">{q.q}</div>
+        </div>
+
+        <div className="flex flex-col gap-2.5">
+          {q.opts.map((opt, i) => (
+            <button key={i} onClick={() => answerQuestion(i)} className="w-full bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl px-5 py-4 text-left text-sm text-warm-800 dark:text-warm-200 font-medium active:scale-[0.98] active:border-terra-400 transition-all shadow-warm-sm hover:border-terra-300">
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-warm-200 dark:bg-warm-700 text-xs font-bold text-warm-600 dark:text-warm-400 mr-3">{String.fromCharCode(65 + i)}</span>
+              {opt}
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // 3단계: 결과
+  const exam = exams.find(e => e.id === examId)
+  if (!exam) return null
+
   return (
-    <div className="animate-screen-fade px-5 pt-2 pb-10">
-      <h2 className="font-display text-xl font-bold text-warm-900 tracking-tight mb-1">칭호 시험</h2>
-      <p className="text-sm text-warm-600 mb-5">컬러 지식을 테스트하고 칭호를 획득하세요</p>
-      <div className="flex flex-col gap-2.5">
-        {['컬러 초보', '컬러 중급자', '컬러 전문가', '컬러 마스터'].map((title, idx) => (
-          <button key={title} className="bg-white border border-warm-400 rounded-2xl p-4 shadow-warm-sm text-left active:scale-[0.98] transition-all">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-terra-100 flex items-center justify-center"><GraduationCap size={20} className="text-terra-600" /></div>
-              <div className="flex-1"><div className="text-sm font-semibold text-warm-900">{title}</div><div className="text-[11px] text-warm-500 mt-0.5">{(idx + 1) * 5}문제 · {['기초', '중급', '고급', '마스터'][idx]}</div></div>
-              <ChevronRight size={16} className="text-warm-500" />
-            </div>
+    <div className="animate-screen-enter px-5 pt-2 pb-10">
+      <div className="text-center py-8">
+        <div className="text-5xl mb-4">{passed ? '🎉' : '😅'}</div>
+        <h2 className="font-display text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">{passed ? '합격!' : '아쉬워요'}</h2>
+        <p className="text-sm text-warm-600 dark:text-warm-400 mb-5">
+          {exam.questions.length}문제 중 {score}문제 정답 {passed ? `— ${exam.name} 칭호 획득!` : `— ${exam.minScore}문제 이상 맞아야 합격`}
+        </p>
+
+        {/* 점수 원형 */}
+        <div className="relative w-[120px] h-[120px] mx-auto mb-5">
+          <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
+            <circle cx={60} cy={60} r={52} fill="none" stroke="#E7E5E4" strokeWidth={8} />
+            <circle cx={60} cy={60} r={52} fill="none" stroke={passed ? '#6B9E76' : '#C2785C'} strokeWidth={8}
+              strokeDasharray={2 * Math.PI * 52} strokeDashoffset={2 * Math.PI * 52 * (1 - score / exam.questions.length)} strokeLinecap="round" className="transition-all duration-700" />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="font-display text-3xl font-bold text-warm-900 dark:text-warm-100">{score}</span>
+            <span className="text-[10px] text-warm-600 dark:text-warm-400">/ {exam.questions.length}</span>
+          </div>
+        </div>
+
+        {/* 문제별 정답 확인 */}
+        <div className="bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl p-4 mb-5 shadow-warm-sm text-left">
+          <div className="text-xs font-semibold text-warm-500 dark:text-warm-400 uppercase tracking-widest mb-3">문제별 결과</div>
+          {exam.questions.map((q, i) => {
+            const correct = answers[i] === q.ans
+            return (
+              <div key={i} className={`flex items-start gap-2.5 py-2.5 ${i < exam.questions.length - 1 ? 'border-b border-warm-300 dark:border-warm-700' : ''}`}>
+                <span className={`text-xs font-bold mt-0.5 ${correct ? 'text-green-600' : 'text-red-500'}`}>{correct ? '○' : '✕'}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[12px] text-warm-800 dark:text-warm-200 leading-relaxed">{q.q}</div>
+                  {!correct && (
+                    <div className="text-[11px] text-green-600 dark:text-green-400 mt-0.5">정답: {q.opts[q.ans]}</div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="flex gap-2.5">
+          <button onClick={() => setStep('list')} className="flex-1 py-3.5 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 text-warm-800 dark:text-warm-200 rounded-2xl font-medium text-sm active:scale-[0.98] transition-all">
+            목록으로
           </button>
-        ))}
+          <button onClick={() => startExam(exam.id)} className="flex-1 py-3.5 bg-terra-500 text-white rounded-2xl font-semibold text-sm active:scale-[0.98] transition-all shadow-terra">
+            다시 도전
+          </button>
+        </div>
       </div>
     </div>
   )

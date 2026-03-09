@@ -42,7 +42,7 @@ export default function BestCoord() {
             <button
               key={record.id}
               onClick={() => navigate(`/closet/ootd/${record.date}?id=${record.id}`)}
-              className="flex items-center gap-3 bg-white border border-warm-400 rounded-2xl p-4 shadow-warm-sm active:scale-[0.98] transition-all text-left"
+              className="flex items-center gap-3 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl p-4 shadow-warm-sm active:scale-[0.98] transition-all text-left"
             >
               <span className="text-lg w-8 text-center flex-shrink-0">{medal}</span>
               <MannequinSVG outfit={outfitHex} size={65} />

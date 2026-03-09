@@ -2,6 +2,8 @@
 import { useState, useCallback, useEffect } from 'react'
 import { COLORS_60 } from '@/lib/colors'
 import { supabase } from '@/lib/supabase'
+import { evaluationSystem } from '@/lib/evaluation'
+import { profile } from '@/lib/profile'
 
 export interface OotdRecord {
   id: string
@@ -102,33 +104,25 @@ export function useOotd() {
     setPhotos(prev => prev.filter((_, i) => i !== idx))
   }, [])
 
-  // 점수 계산 (HCL 기반 간이)
+  const replacePhoto = useCallback((idx: number, dataUrl: string) => {
+    setPhotos(prev => prev.map((p, i) => i === idx ? dataUrl : p))
+  }, [])
+
+  // 점수 계산 (evaluationSystem 기반)
   const calcScore = (outfit: Record<string, string>): number => {
     const keys = Object.keys(outfit)
-    const n = keys.length
-    if (n < 2) return 0
-    let score = 50
-    // 색상 수 보너스
-    score += Math.min(n * 5, 25)
-    // 컬러 다양성
-    const hues = new Set<number>()
-    keys.forEach(k => {
-      const c = COLORS_60[outfit[k]]
-      if (c?.hcl) hues.add(Math.round(c.hcl[0] / 30))
-    })
-    score += Math.min(hues.size * 3, 15)
-    // 명도 밸런스
-    const lightnesses = keys.map(k => COLORS_60[outfit[k]]?.hcl?.[2] || 50)
-    const avgL = lightnesses.reduce((a, b) => a + b, 0) / lightnesses.length
-    if (avgL >= 30 && avgL <= 70) score += 5
-    // 온도 일관성
-    const temps = keys.map(k => {
-      const h = COLORS_60[outfit[k]]?.hcl?.[0] || 0
-      return (h >= 0 && h <= 60) || (h >= 300 && h <= 360) ? 'w' : 'c'
-    })
-    const warmRatio = temps.filter(t => t === 'w').length / temps.length
-    if (warmRatio >= 0.7 || warmRatio <= 0.3) score += 5
-    return Math.min(100, Math.max(0, Math.round(score)))
+    if (keys.length < 2) return 0
+    try {
+      const pc = profile.getPersonalColor()
+      const result = evaluationSystem.evaluate(outfit, pc)
+      return result.total
+    } catch (e) {
+      console.warn('Evaluation fallback:', e)
+      // 폴백: 간이 계산
+      let score = 50
+      score += Math.min(keys.length * 5, 25)
+      return Math.min(100, Math.max(0, Math.round(score)))
+    }
   }
 
   const saveRecord = useCallback(() => {
@@ -270,7 +264,7 @@ export function useOotd() {
     colors, photos, situation, mood, memo, visibility, showInstagram,
     openPicker, editId, filledCount, canSave, needsPhoto, weatherData,
     setOpenPicker, selectColor, clearColor,
-    addPhoto, removePhoto,
+    addPhoto, removePhoto, replacePhoto,
     setSituation, setMood, setMemo, setVisibility, setShowInstagram,
     saveRecord, deleteRecord, resetForm, startEdit, getRecords,
     weatherEmoji, weatherText,

@@ -4,64 +4,125 @@
 // ================================================================
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { CloudSun, Thermometer, Droplets, Wind, HelpCircle, Scissors, Ruler, ShoppingBag, ExternalLink, Trophy, ChevronRight, Palette, ArrowRight, ArrowLeft, Check } from 'lucide-react'
+import { CloudSun, Thermometer, Droplets, Wind, HelpCircle, Scissors, Ruler, ShoppingBag, ExternalLink, Trophy, ChevronRight, Palette, ArrowRight, ArrowLeft, Check, ThumbsUp, ThumbsDown, Minus, CheckCircle, XCircle } from 'lucide-react'
 import MannequinSVG from '@/components/mannequin/MannequinSVG'
 import { COLORS_60 } from '@/lib/colors'
-import { STYLE_GUIDE, MOOD_GROUPS, LAYER_LEVELS } from '@/lib/styles'
-import { PERSONAL_COLOR_12 } from '@/lib/personalColor'
-import { BODY_GUIDE_DATA, BODY_TYPE_DIAGNOSIS } from '@/lib/bodyType'
+import { STYLE_GUIDE, MOOD_GROUPS, LAYER_LEVELS, STYLE_ICONS } from '@/lib/styles'
+import { STYLE_MOODS } from '@/lib/styleMoods'
+import { PERSONAL_COLOR_12, PERSONAL_COLOR_DIAGNOSIS } from '@/lib/personalColor'
+import { BODY_GUIDE_DATA, BODY_TYPE_DIAGNOSIS, BODY_QUIZ_QUESTIONS } from '@/lib/bodyType'
+import { CATEGORY_NAMES, FABRIC_ITEMS, FABRIC_SEASONS, FABRIC_COMPAT_RULES, evaluateFabricCombo } from '@/lib/categories'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { profile } from '@/lib/profile'
 
 // ─── 날씨 코디 ───
 export function Weather() {
+  const navigate = useNavigate()
   const [weather, setWeather] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // sessionStorage 캐시 먼저 확인
+    try {
+      const cached = JSON.parse(sessionStorage.getItem('_weather') || 'null')
+      if (cached) { setWeather(cached); setLoading(false); return }
+    } catch {}
+
     navigator.geolocation?.getCurrentPosition(async (pos) => {
       try {
         const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${pos.coords.latitude}&longitude=${pos.coords.longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m`)
         const data = await res.json()
         const c = data.current
-        setWeather({ temp: Math.round(c.temperature_2m), feels: Math.round(c.apparent_temperature), humidity: c.relative_humidity_2m, wind: Math.round(c.wind_speed_10m), code: c.weather_code })
+        const w = { temp: Math.round(c.temperature_2m), feels: Math.round(c.apparent_temperature), humidity: c.relative_humidity_2m, wind: Math.round(c.wind_speed_10m), code: c.weather_code }
+        setWeather(w)
+        sessionStorage.setItem('_weather', JSON.stringify(w))
       } catch { setWeather(null) } finally { setLoading(false) }
     }, () => { setLoading(false) })
   }, [])
 
-  const getLayerAdvice = (feels: number) => {
-    if (feels >= 28) return { layer: 'simple', desc: '반팔 + 반바지', emoji: '☀️' }
-    if (feels >= 23) return { layer: 'simple', desc: '반팔 + 긴바지', emoji: '🌤️' }
-    if (feels >= 17) return { layer: 'basic', desc: '긴팔 + 긴바지', emoji: '⛅' }
-    if (feels >= 12) return { layer: 'basic', desc: '자켓 or 가디건', emoji: '🍂' }
-    if (feels >= 5) return { layer: 'mid_inner', desc: '코트 + 니트', emoji: '🧥' }
-    return { layer: 'layered', desc: '패딩 + 기모', emoji: '❄️' }
+  const getAdvice = (feels: number) => {
+    if (feels >= 28) return { layer: 'simple', title: '한여름 코디', desc: '반팔 + 반바지 or 린넨 팬츠', emoji: '☀️', detail: '얇고 통기성 좋은 소재를 선택하세요. 린넨, 코튼 저지, 시어서커가 좋아요.', items: ['반팔 티셔츠', '린넨 셔츠', '숏팬츠', '린넨 팬츠', '샌들/슬리퍼'], colorTip: '화이트, 아이보리, 파스텔 톤으로 시원한 인상을' }
+    if (feels >= 23) return { layer: 'simple', title: '초여름 코디', desc: '반팔 + 면바지 · 가벼운 원피스', emoji: '🌤️', detail: '낮에는 반팔, 실내 냉방 대비 얇은 가디건 하나 챙기면 완벽해요.', items: ['반팔 셔츠', '얇은 가디건', '코튼 치노', '면바지', '스니커즈/로퍼'], colorTip: '베이지 + 네이비, 화이트 + 카키 조합 추천' }
+    if (feels >= 17) return { layer: 'basic', title: '간절기 코디', desc: '긴팔 + 긴바지 · 가벼운 아우터', emoji: '⛅', detail: '일교차가 큰 시기. 레이어드하기 좋은 셔츠 + 니트 조합이 활용도 높아요.', items: ['옥스포드 셔츠', '얇은 니트', '면바지/데님', '라이트 자켓', '로퍼/더비슈즈'], colorTip: '어스톤 계열 — 베이지, 카키, 올리브가 계절감에 맞아요' }
+    if (feels >= 12) return { layer: 'basic', title: '초가을 코디', desc: '자켓 or 가디건 + 긴바지', emoji: '🍂', detail: '바람막이 역할을 하는 아우터가 필요해요. 맨투맨 위에 자켓을 걸치면 깔끔해요.', items: ['블레이저/치노 자켓', '가디건', '맨투맨', '울 팬츠', '첼시 부츠'], colorTip: '브라운, 테라코타, 머스타드로 가을 무드를' }
+    if (feels >= 5) return { layer: 'mid_inner', title: '겨울 코디', desc: '코트 + 니트 · 머플러 추천', emoji: '🧥', detail: '보온이 중요해요. 이너는 얇게 여러 겹, 아우터는 방풍 기능 있는 걸로 선택하세요.', items: ['울 코트', '두꺼운 니트', '기모 팬츠', '머플러', '워커/부츠'], colorTip: '차콜, 네이비, 캐멀 — 겨울 클래식 3색' }
+    if (feels >= -5) return { layer: 'layered', title: '한겨울 코디', desc: '패딩 + 기모 · 방한 필수', emoji: '❄️', detail: '발열 내의 → 니트/맨투맨 → 패딩의 3단 레이어링이 기본. 목, 손, 발 보온에 신경 쓰세요.', items: ['롱패딩/숏패딩', '기모 맨투맨', '기모 팬츠', '비니/장갑', '방한 부츠'], colorTip: '블랙, 네이비 베이스에 머플러로 포인트' }
+    return { layer: 'layered', title: '극한 방한', desc: '완전무장 · 노출 최소화', emoji: '🥶', detail: '야외 활동을 최소화하세요. 방풍 + 방수 소재 필수.', items: ['헤비 패딩', '기모 내의', '방풍 바지', '넥워머', '방한화'], colorTip: '기능성 우선' }
   }
+
+  const weatherEmojiLocal = (code: number) => code === 0 ? '☀️' : code <= 3 ? '⛅' : code <= 48 ? '🌫️' : code <= 67 ? '🌧️' : code <= 77 ? '❄️' : code <= 82 ? '🌧️' : '⛈️'
+  const weatherTextLocal = (code: number) => code === 0 ? '맑음' : code <= 3 ? '구름 조금' : code <= 48 ? '안개' : code <= 57 ? '이슬비' : code <= 67 ? '비' : code <= 77 ? '눈' : code <= 82 ? '소나기' : '뇌우'
 
   if (loading) return <div className="animate-screen-fade px-5 pt-6 text-center py-20 text-sm text-warm-400">날씨를 불러오는 중...</div>
 
   return (
     <div className="animate-screen-fade px-5 pt-2 pb-10">
-      <h2 className="font-display text-xl font-bold text-warm-900 tracking-tight mb-5">오늘 뭐 입지?</h2>
-      {weather ? (
-        <>
-          <div className="bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-200 rounded-2xl p-5 mb-5 text-center">
-            <div className="text-4xl mb-2">{getLayerAdvice(weather.feels).emoji}</div>
-            <div className="font-display text-3xl font-bold text-warm-900">{weather.temp}°C</div>
-            <div className="text-sm text-warm-600 mt-1">체감 {weather.feels}°C</div>
-            <div className="flex justify-center gap-4 mt-3 text-xs text-warm-600">
-              <span className="flex items-center gap-1"><Droplets size={12} /> {weather.humidity}%</span>
-              <span className="flex items-center gap-1"><Wind size={12} /> {weather.wind}km/h</span>
+      <h2 className="font-display text-xl font-bold text-warm-900 dark:text-warm-100 tracking-tight mb-5">오늘 뭐 입지?</h2>
+      {weather ? (() => {
+        const advice = getAdvice(weather.feels)
+        return (
+          <>
+            {/* 날씨 헤더 */}
+            <div className="bg-gradient-to-br from-sky-50 to-blue-50 dark:from-sky-900/30 dark:to-blue-900/30 border border-sky-200 dark:border-sky-800 rounded-2xl p-5 mb-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-4xl">{weatherEmojiLocal(weather.code)}</span>
+                  <div>
+                    <div className="font-display text-3xl font-bold text-warm-900 dark:text-warm-100">{weather.temp}°C</div>
+                    <div className="text-sm text-warm-600 dark:text-warm-400">체감 {weather.feels}°C · {weatherTextLocal(weather.code)}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-4 text-xs text-warm-600 dark:text-warm-400">
+                <span className="flex items-center gap-1"><Droplets size={12} /> 습도 {weather.humidity}%</span>
+                <span className="flex items-center gap-1"><Wind size={12} /> 바람 {weather.wind}km/h</span>
+              </div>
             </div>
-          </div>
-          <div className="bg-white border border-warm-400 rounded-2xl p-4 shadow-warm-sm mb-5">
-            <div className="text-sm font-bold text-warm-900 mb-1">추천 레이어</div>
-            <div className="text-sm text-warm-600">{getLayerAdvice(weather.feels).desc}</div>
-          </div>
-        </>
-      ) : (
-        <div className="text-center py-12 text-warm-600 text-sm">위치 정보를 허용하면 날씨 기반 추천을 받을 수 있어요</div>
+
+            {/* 추천 레이어 */}
+            <div className="bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl p-5 shadow-warm-sm mb-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-2xl">{advice.emoji}</span>
+                <div>
+                  <div className="text-base font-bold text-warm-900 dark:text-warm-100">{advice.title}</div>
+                  <div className="text-sm text-terra-600 dark:text-terra-400 font-medium">{advice.desc}</div>
+                </div>
+              </div>
+              <p className="text-sm text-warm-600 dark:text-warm-400 leading-relaxed mb-4">{advice.detail}</p>
+
+              {/* 추천 아이템 */}
+              <div className="mb-4">
+                <div className="text-xs font-semibold text-warm-500 dark:text-warm-400 uppercase tracking-widest mb-2">추천 아이템</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {advice.items.map((item: string) => (
+                    <span key={item} className="px-2.5 py-1.5 bg-warm-100 dark:bg-warm-700 text-warm-700 dark:text-warm-300 rounded-full text-xs font-medium">{item}</span>
+                  ))}
+                </div>
+              </div>
+
+              {/* 컬러 팁 */}
+              <div className="bg-terra-50 dark:bg-terra-900/30 border border-terra-200 dark:border-terra-800 rounded-xl px-3.5 py-2.5">
+                <div className="text-xs font-semibold text-terra-700 dark:text-terra-400 mb-0.5">컬러 팁</div>
+                <div className="text-xs text-terra-600 dark:text-terra-400">{advice.colorTip}</div>
+              </div>
+            </div>
+
+            {/* CTA */}
+            <button
+              onClick={() => navigate('/home/recommend')}
+              className="w-full py-3.5 bg-terra-500 text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-terra"
+            >
+              <Palette size={16} /> 이 날씨에 맞는 코디 추천받기
+            </button>
+          </>
+        )
+      })() : (
+        <div className="text-center py-12">
+          <div className="text-4xl mb-3">📍</div>
+          <div className="text-sm text-warm-600 dark:text-warm-400 mb-1">위치 정보를 허용해주세요</div>
+          <div className="text-xs text-warm-500 dark:text-warm-500">날씨 기반으로 오늘의 코디를 추천해 드릴게요</div>
+        </div>
       )}
     </div>
   )
@@ -71,7 +132,7 @@ export function Weather() {
 export function Quiz() {
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
-  const [answers, setAnswers] = useState<string[]>([])
+  const [answers, setAnswers] = useState<number[]>([])
   const questions = [
     { q: '주말에 주로 뭘 하시나요?', a: ['카페 탐방 ☕', '운동/하이킹 🏃', '쇼핑/전시 🛍️', '집에서 휴식 🏠'] },
     { q: '선호하는 컬러 톤은?', a: ['뉴트럴/베이지 계열', '네이비/차콜 계열', '파스텔/밝은 톤', '다크/무채색'] },
@@ -80,72 +141,501 @@ export function Quiz() {
   ]
   const done = step >= questions.length
 
+  // 답변 기반 스타일 매핑
+  const calcResult = (ans: number[]) => {
+    // [활동, 컬러, 가치, 신발] 각 답변 인덱스
+    const scoreMap: Record<string, number> = {}
+    const add = (s: string, v: number) => { scoreMap[s] = (scoreMap[s] || 0) + v }
+    // 활동
+    if (ans[0] === 0) { add('casual', 3); add('minimal', 2); add('cityboy', 2) }       // 카페
+    if (ans[0] === 1) { add('athleisure', 3); add('gorpcore', 3); add('workwear', 1) }  // 운동
+    if (ans[0] === 2) { add('preppy', 2); add('dandy', 2); add('contemporary', 2) }     // 쇼핑/전시
+    if (ans[0] === 3) { add('normcore', 3); add('casual', 2); add('minimal', 1) }       // 집
+    // 컬러
+    if (ans[1] === 0) { add('minimal', 3); add('oldmoney', 2); add('normcore', 1) }     // 뉴트럴
+    if (ans[1] === 1) { add('preppy', 2); add('british', 2); add('ivy', 2) }            // 네이비
+    if (ans[1] === 2) { add('casual', 2); add('cityboy', 2); add('genderless', 1) }     // 파스텔
+    if (ans[1] === 3) { add('street', 2); add('techwear', 3); add('grunge', 2) }        // 다크
+    // 가치
+    if (ans[2] === 0) { add('normcore', 3); add('casual', 2); add('athleisure', 1) }    // 편안함
+    if (ans[2] === 1) { add('dandy', 3); add('oldmoney', 2); add('minimal', 2) }       // 세련됨
+    if (ans[2] === 2) { add('street', 3); add('grunge', 2); add('contemporary', 2) }   // 개성
+    if (ans[2] === 3) { add('amekaji', 2); add('workwear', 2); add('casual', 2) }      // 가성비
+    // 신발
+    if (ans[3] === 0) { add('casual', 2); add('street', 2); add('athleisure', 1) }     // 스니커즈
+    if (ans[3] === 1) { add('preppy', 3); add('dandy', 2); add('oldmoney', 2) }        // 로퍼
+    if (ans[3] === 2) { add('military', 2); add('workwear', 2); add('gorpcore', 2) }   // 부츠
+    if (ans[3] === 3) { add('normcore', 2); add('casual', 1); add('minimal', 1) }      // 슬리퍼
+
+    const sorted = Object.entries(scoreMap).sort((a, b) => b[1] - a[1])
+    return sorted.slice(0, 3).map(([s]) => s)
+  }
+
+  const resultStyles = done ? calcResult(answers) : []
+  const topStyle = resultStyles[0] || 'casual'
+  const topData = STYLE_GUIDE[topStyle] || null
+  const topIcon = (STYLE_ICONS as any)?.[topStyle] || '🎨'
+
   return (
     <div className="animate-screen-fade px-5 pt-2 pb-10">
       {!done ? (
         <>
-          <div className="h-1 bg-warm-300 rounded-full mb-5"><div className="h-full bg-terra-500 rounded-full transition-all" style={{ width: `${((step + 1) / questions.length) * 100}%` }} /></div>
-          <h2 className="font-display text-xl font-bold text-warm-900 tracking-tight mb-2">{questions[step].q}</h2>
-          <p className="text-sm text-warm-600 mb-5">{step + 1} / {questions.length}</p>
+          <div className="h-1 bg-warm-300 dark:bg-warm-700 rounded-full mb-5"><div className="h-full bg-terra-500 rounded-full transition-all" style={{ width: `${((step + 1) / questions.length) * 100}%` }} /></div>
+          <h2 className="font-display text-xl font-bold text-warm-900 dark:text-warm-100 tracking-tight mb-2">{questions[step].q}</h2>
+          <p className="text-sm text-warm-600 dark:text-warm-400 mb-5">{step + 1} / {questions.length}</p>
           <div className="flex flex-col gap-2.5">
-            {questions[step].a.map(a => (
-              <button key={a} onClick={() => { setAnswers([...answers, a]); setStep(step + 1) }}
-                className="w-full py-3.5 bg-white border border-warm-400 rounded-2xl text-sm font-medium text-warm-800 shadow-warm-sm active:scale-[0.98] transition-all hover:border-terra-300 text-left px-4">{a}</button>
+            {questions[step].a.map((a, idx) => (
+              <button key={a} onClick={() => { setAnswers([...answers, idx]); setStep(step + 1) }}
+                className="w-full py-3.5 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl text-sm font-medium text-warm-800 dark:text-warm-200 shadow-warm-sm active:scale-[0.98] transition-all hover:border-terra-300 text-left px-4">{a}</button>
             ))}
           </div>
           {step > 0 && <button onClick={() => { setStep(step - 1); setAnswers(answers.slice(0, -1)) }} className="w-full text-center text-sm text-warm-500 mt-4 active:opacity-70">이전 질문</button>}
         </>
       ) : (
-        <div className="text-center py-8">
-          <div className="text-4xl mb-4">🎉</div>
-          <h2 className="font-display text-xl font-bold text-warm-900 mb-2">분석 완료!</h2>
-          <p className="text-sm text-warm-600 mb-5">당신에게 어울리는 스타일을 찾았어요</p>
-          <div className="bg-terra-100 border border-terra-200 rounded-2xl p-5 mb-5">
-            <div className="text-2xl mb-2">👔</div>
-            <div className="font-display text-lg font-bold text-terra-700">캐주얼 룩</div>
-            <div className="text-sm text-warm-600 mt-1">편안하면서도 센스 있는 일상 코디</div>
+        <div className="py-6">
+          <div className="text-center mb-6">
+            <div className="text-4xl mb-3">🎉</div>
+            <h2 className="font-display text-xl font-bold text-warm-900 dark:text-warm-100 mb-1">분석 완료!</h2>
+            <p className="text-sm text-warm-600 dark:text-warm-400">당신에게 어울리는 스타일을 찾았어요</p>
           </div>
-          <button onClick={() => navigate('/home/recommend?style=casual')} className="px-6 py-3 bg-terra-500 text-white rounded-2xl font-semibold text-sm active:scale-[0.98] transition-all shadow-terra">이 스타일로 추천받기</button>
+
+          {/* Top 3 스타일 결과 */}
+          <div className="flex flex-col gap-3 mb-5">
+            {resultStyles.map((styleKey, rank) => {
+              const sd = STYLE_GUIDE[styleKey]
+              if (!sd) return null
+              const icon = (STYLE_ICONS as any)?.[styleKey] || '🎨'
+              const isTop = rank === 0
+              // 스타일 무드에서 대표 컬러 추출
+              const moods = (STYLE_MOODS as any)?.[styleKey]
+              const sampleColors = moods ? Object.values(moods).flatMap((m: any) => [...(m.darks || []), ...(m.mids || []), ...(m.lights || [])].slice(0, 3)).filter((v, i, a) => a.indexOf(v) === i).slice(0, 6) : []
+
+              return (
+                <button key={styleKey} onClick={() => navigate(`/home/recommend?style=${styleKey}`)}
+                  className={`w-full text-left rounded-2xl p-4 transition-all active:scale-[0.98] ${
+                    isTop ? 'bg-terra-100 dark:bg-terra-900/30 border-[1.5px] border-terra-300 dark:border-terra-700 shadow-warm' : 'bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 shadow-warm-sm'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-2xl">{icon}</span>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[15px] font-bold ${isTop ? 'text-terra-700 dark:text-terra-400' : 'text-warm-900 dark:text-warm-100'}`}>{sd.name}</span>
+                        {isTop && <span className="text-[10px] font-bold bg-terra-500 text-white px-2 py-0.5 rounded-full">BEST</span>}
+                        {rank === 1 && <span className="text-[10px] font-medium text-warm-500">2nd</span>}
+                        {rank === 2 && <span className="text-[10px] font-medium text-warm-500">3rd</span>}
+                      </div>
+                      <div className="text-xs text-warm-600 dark:text-warm-400 mt-0.5">{sd.subtitle}</div>
+                    </div>
+                    <ChevronRight size={16} className="text-warm-400 flex-shrink-0" />
+                  </div>
+                  {/* 대표 컬러 팔레트 */}
+                  {sampleColors.length > 0 && (
+                    <div className="flex gap-1.5 ml-10">
+                      {sampleColors.map((ck: string) => {
+                        const c = COLORS_60[ck]
+                        return c ? <div key={ck} className="w-5 h-5 rounded-full border border-warm-300/50" style={{ background: c.hex }} /> : null
+                      })}
+                    </div>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          <button onClick={() => { setStep(0); setAnswers([]) }} className="w-full text-center text-sm text-warm-500 dark:text-warm-400 py-2 active:opacity-70">다시 할래요</button>
         </div>
       )}
     </div>
   )
 }
 
-// ─── 소재 가이드 ───
+// ─── 소재 가이드 3단계 ───
 export function FabricGuide() {
-  return (
-    <div className="animate-screen-fade px-5 pt-2 pb-10">
-      <h2 className="font-display text-xl font-bold text-warm-900 tracking-tight mb-2">소재 가이드</h2>
-      <p className="text-sm text-warm-600 mb-5">소재별 특성과 궁합을 확인하세요</p>
-      {['면/코튼', '울/모직', '데님', '니트', '실크', '린넨', '폴리에스터', '가죽'].map(fabric => (
-        <div key={fabric} className="bg-white border border-warm-400 rounded-2xl p-4 mb-2.5 shadow-warm-sm">
-          <div className="flex items-center gap-3"><Scissors size={18} className="text-terra-500" /><div className="text-sm font-semibold text-warm-900">{fabric}</div></div>
+  const navigate = useNavigate()
+  const [step, setStep] = useState<'browse' | 'pick' | 'summary'>('browse')
+  const [selectedPart, setSelectedPart] = useState<string | null>(null)
+  const [selections, setSelections] = useState<Record<string, any>>({})
+
+  const currentSeason = (() => {
+    const m = new Date().getMonth()
+    if (m >= 2 && m <= 4) return 'spring'
+    if (m >= 5 && m <= 7) return 'summer'
+    if (m >= 8 && m <= 10) return 'fall'
+    return 'winter'
+  })()
+  const [seasonFilter, setSeasonFilter] = useState<string | null>(currentSeason)
+
+  const handleSelect = (part: string, item: any) => {
+    setSelections(prev => {
+      const next = { ...prev }
+      if (next[part]?.id === item.id) delete next[part]
+      else next[part] = item
+      return next
+    })
+  }
+
+  // 1단계: 부위별 아이템 탐색
+  if (step === 'browse') {
+    const parts = Object.keys(FABRIC_ITEMS).filter(k => FABRIC_ITEMS[k]?.length > 0)
+    return (
+      <div className="animate-screen-fade px-5 pt-2 pb-10">
+        <h2 className="font-display text-xl font-bold text-warm-900 dark:text-warm-100 tracking-tight mb-1">소재 가이드</h2>
+        <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">부위별 아이템과 소재 특성을 확인하세요</p>
+
+        {/* 계절 필터 */}
+        <div className="flex gap-1.5 mb-5 overflow-x-auto hide-scrollbar">
+          <button onClick={() => setSeasonFilter(null)} className={`px-3 py-1.5 rounded-full text-[11px] font-semibold flex-shrink-0 transition-all ${!seasonFilter ? 'bg-terra-500 text-white' : 'bg-warm-200 dark:bg-warm-700 text-warm-600 dark:text-warm-400'}`}>전체</button>
+          {Object.entries(FABRIC_SEASONS).map(([k, s]) => (
+            <button key={k} onClick={() => setSeasonFilter(seasonFilter === k ? null : k)} className={`px-3 py-1.5 rounded-full text-[11px] font-semibold flex-shrink-0 transition-all ${seasonFilter === k ? 'bg-terra-500 text-white' : 'bg-warm-200 dark:bg-warm-700 text-warm-600 dark:text-warm-400'}`}>{s.emoji} {s.name}</button>
+          ))}
         </div>
-      ))}
+
+        {parts.map(part => {
+          const items = FABRIC_ITEMS[part]
+          const filtered = seasonFilter ? items.filter(i => i.seasons.includes(seasonFilter)) : items
+          if (filtered.length === 0) return null
+          return (
+            <div key={part} className="mb-5">
+              <div className="text-xs font-semibold text-warm-600 dark:text-warm-400 tracking-widest uppercase mb-2.5">{(CATEGORY_NAMES as any)?.[part] || part}</div>
+              <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
+                {filtered.map(item => (
+                  <div key={item.id} className="flex-shrink-0 w-[130px] bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-xl p-3 shadow-warm-sm">
+                    <div className="text-lg mb-1">{item.icon}</div>
+                    <div className="text-[12px] font-semibold text-warm-900 dark:text-warm-100">{item.name}</div>
+                    <div className="text-[10px] text-warm-500 dark:text-warm-400 mt-0.5 leading-snug">{item.desc}</div>
+                    <div className="flex gap-0.5 mt-1.5">{item.seasons.map(s => <span key={s} className="text-[9px]">{FABRIC_SEASONS[s]?.emoji}</span>)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+
+        <button onClick={() => setStep('pick')} className="w-full py-3.5 bg-terra-500 text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-terra mt-2">
+          <Scissors size={16} /> 소재 궁합 체크하기
+        </button>
+      </div>
+    )
+  }
+
+  // 2단계: 부위별 소재 선택
+  if (step === 'pick') {
+    const parts = Object.keys(FABRIC_ITEMS).filter(k => FABRIC_ITEMS[k]?.length > 0)
+    return (
+      <div className="animate-screen-enter px-5 pt-2 pb-10">
+        <button onClick={() => setStep('browse')} className="flex items-center gap-1 text-sm text-warm-600 dark:text-warm-400 mb-4 active:opacity-70"><ArrowLeft size={16} /> 뒤로</button>
+        <h2 className="font-display text-xl font-bold text-warm-900 dark:text-warm-100 tracking-tight mb-1">소재 선택</h2>
+        <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">각 부위의 소재를 골라 궁합을 확인하세요</p>
+
+        <div className="flex gap-1.5 mb-5 overflow-x-auto hide-scrollbar">
+          <button onClick={() => setSeasonFilter(null)} className={`px-3 py-1.5 rounded-full text-[11px] font-semibold flex-shrink-0 transition-all ${!seasonFilter ? 'bg-terra-500 text-white' : 'bg-warm-200 dark:bg-warm-700 text-warm-600 dark:text-warm-400'}`}>전체</button>
+          {Object.entries(FABRIC_SEASONS).map(([k, s]) => (
+            <button key={k} onClick={() => setSeasonFilter(seasonFilter === k ? null : k)} className={`px-3 py-1.5 rounded-full text-[11px] font-semibold flex-shrink-0 transition-all ${seasonFilter === k ? 'bg-terra-500 text-white' : 'bg-warm-200 dark:bg-warm-700 text-warm-600 dark:text-warm-400'}`}>{s.emoji} {s.name}</button>
+          ))}
+        </div>
+
+        {parts.map(part => {
+          const items = FABRIC_ITEMS[part]
+          const filtered = seasonFilter ? items.filter(i => i.seasons.includes(seasonFilter)) : items
+          if (filtered.length === 0) return null
+          const sel = selections[part]
+          return (
+            <div key={part} className="mb-5">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-semibold text-warm-600 dark:text-warm-400 uppercase tracking-widest">{(CATEGORY_NAMES as any)?.[part]}</span>
+                {sel && <span className="text-[10px] text-terra-600 dark:text-terra-400 font-medium ml-auto">{sel.name}</span>}
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
+                {filtered.map(item => {
+                  const isSel = sel?.id === item.id
+                  return (
+                    <button key={item.id} onClick={() => handleSelect(part, item)} className={`flex-shrink-0 w-[120px] border rounded-xl p-2.5 text-left transition-all active:scale-[0.97] ${isSel ? 'bg-terra-50 dark:bg-terra-900/30 border-terra-400 shadow-warm' : 'bg-white dark:bg-warm-800 border-warm-400 dark:border-warm-600 shadow-warm-sm'}`}>
+                      <div className="text-lg mb-1">{item.icon}</div>
+                      <div className="text-[12px] font-semibold text-warm-900 dark:text-warm-100">{item.name}</div>
+                      <div className="text-[10px] text-warm-500 dark:text-warm-400 mt-0.5 leading-snug">{item.desc}</div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+
+        <button onClick={() => { if (Object.keys(selections).length >= 2) setStep('summary'); else alert('2개 이상 부위의 소재를 선택해주세요') }} className={`w-full py-3.5 ${Object.keys(selections).length >= 2 ? 'bg-terra-500 shadow-terra' : 'bg-warm-400 dark:bg-warm-600'} text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all`}>
+          궁합 결과 보기 ({Object.keys(selections).length}개 선택됨) <ArrowRight size={18} />
+        </button>
+      </div>
+    )
+  }
+
+  // 3단계: 궁합 결과
+  const pairs = evaluateFabricCombo(selections)
+  const greatCount = pairs.filter(p => p.rating === 'great').length
+  const okCount = pairs.filter(p => p.rating === 'ok').length
+  const badCount = pairs.filter(p => p.rating === 'bad').length
+  const totalScore = Math.round(((greatCount * 3 + okCount * 1) / Math.max(pairs.length, 1)) * 33)
+  const ratingIcons = { great: <ThumbsUp size={14} className="text-green-600" />, ok: <Minus size={14} className="text-warm-500" />, bad: <ThumbsDown size={14} className="text-red-500" /> }
+  const ratingColors = { great: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800', ok: 'bg-warm-50 dark:bg-warm-800 border-warm-300 dark:border-warm-600', bad: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' }
+
+  return (
+    <div className="animate-screen-enter px-5 pt-2 pb-10">
+      <button onClick={() => setStep('pick')} className="flex items-center gap-1 text-sm text-warm-600 dark:text-warm-400 mb-4 active:opacity-70"><ArrowLeft size={16} /> 소재 수정</button>
+
+      <div className="text-center mb-5">
+        <div className="text-4xl mb-2">{badCount === 0 ? '✨' : badCount <= 1 ? '👍' : '⚠️'}</div>
+        <h2 className="font-display text-xl font-bold text-warm-900 dark:text-warm-100">{badCount === 0 ? '완벽한 소재 조합!' : badCount <= 1 ? '괜찮은 조합이에요' : '일부 소재가 충돌해요'}</h2>
+        <div className="flex justify-center gap-4 mt-3 text-sm">
+          {greatCount > 0 && <span className="text-green-600 dark:text-green-400 font-semibold">추천 {greatCount}</span>}
+          {okCount > 0 && <span className="text-warm-600 dark:text-warm-400 font-medium">무난 {okCount}</span>}
+          {badCount > 0 && <span className="text-red-500 dark:text-red-400 font-semibold">비추 {badCount}</span>}
+        </div>
+      </div>
+
+      {/* 선택한 소재 요약 */}
+      <div className="flex gap-2 flex-wrap justify-center mb-5">
+        {Object.entries(selections).map(([part, item]) => (
+          <div key={part} className="flex items-center gap-1.5 bg-terra-50 dark:bg-terra-900/30 border border-terra-200 dark:border-terra-800 rounded-full px-3 py-1.5 text-[11px]">
+            <span className="font-semibold text-terra-700 dark:text-terra-400">{(CATEGORY_NAMES as any)?.[part]}</span>
+            <span className="text-warm-600 dark:text-warm-400">{item.name}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* 궁합 쌍별 결과 */}
+      <div className="flex flex-col gap-2 mb-5">
+        {pairs.map((p, idx) => (
+          <div key={idx} className={`flex items-start gap-2.5 border rounded-xl px-3.5 py-2.5 ${ratingColors[p.rating]}`}>
+            <div className="flex-shrink-0 mt-0.5">{ratingIcons[p.rating]}</div>
+            <div className="flex-1">
+              <div className="flex items-center gap-1.5 text-[12px] font-semibold text-warm-800 dark:text-warm-200">
+                {p.itemA?.name || (CATEGORY_NAMES as any)?.[p.partA]}
+                <span className="text-warm-400">×</span>
+                {p.itemB?.name || (CATEGORY_NAMES as any)?.[p.partB]}
+              </div>
+              <div className="text-[11px] text-warm-600 dark:text-warm-400 leading-relaxed mt-0.5">{p.reason}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-2.5">
+        <button onClick={() => setStep('pick')} className="flex-1 py-3 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 text-warm-800 dark:text-warm-200 rounded-2xl font-medium text-sm active:scale-[0.98] transition-all">소재 수정</button>
+        <button onClick={() => { setSelections({}); setStep('browse') }} className="flex-1 py-3 bg-terra-500 text-white rounded-2xl font-semibold text-sm active:scale-[0.98] transition-all shadow-terra">처음으로</button>
+      </div>
     </div>
   )
 }
 
-// ─── 체형별 코디 ───
+// ─── 체형별 코디 4단계 ───
 export function BodyGuide() {
   const navigate = useNavigate()
-  const bodyTypes = Object.entries(BODY_GUIDE_DATA || {}).slice(0, 6)
+  const [step, setStep] = useState<'list' | 'quiz' | 'select' | 'result'>('list')
+  const [quizStep, setQuizStep] = useState(0)
+  const [scores, setScores] = useState<Record<string, number>>({})
+  const [resultType, setResultType] = useState<string | null>(null)
+  const [gender, setGender] = useState<'male' | 'female'>(profile.getGender() === 'female' ? 'female' : 'male')
+
+  const bodyTypes = Object.entries(BODY_GUIDE_DATA || {})
+  const savedType = profile.getBodyType()
+
+  const handleQuizAnswer = (optScores: Record<string, number>) => {
+    const newScores = { ...scores }
+    Object.entries(optScores).forEach(([k, v]) => { newScores[k] = (newScores[k] || 0) + v })
+    setScores(newScores)
+
+    if (quizStep < BODY_QUIZ_QUESTIONS.length - 1) {
+      setQuizStep(quizStep + 1)
+    } else {
+      // 채점 → 가장 높은 점수의 체형
+      const sorted = Object.entries(newScores).sort((a, b) => b[1] - a[1])
+      const best = sorted[0]?.[0] || 'rectangle'
+      setResultType(best)
+      setStep('result')
+    }
+  }
+
+  const handleSave = () => {
+    if (!resultType) return
+    profile.setBodyType(resultType)
+    const effect = BODY_GUIDE_DATA[resultType]?.bodyEffect
+    if (effect) profile.setBodyEffect(effect)
+  }
+
+  // 1단계: 체형 목록 + 진단 시작
+  if (step === 'list') {
+    return (
+      <div className="animate-screen-fade px-5 pt-2 pb-10">
+        <h2 className="font-display text-xl font-bold text-warm-900 dark:text-warm-100 tracking-tight mb-1">체형별 코디 가이드</h2>
+        <p className="text-sm text-warm-600 dark:text-warm-400 mb-5">내 체형에 맞는 컬러 배치와 스타일링 팁을 확인하세요</p>
+
+        {savedType && BODY_GUIDE_DATA[savedType] && (
+          <button onClick={() => { setResultType(savedType); setStep('result') }} className="w-full flex items-center gap-3 bg-terra-50 dark:bg-terra-900/30 border border-terra-200 dark:border-terra-800 rounded-2xl px-4 py-3.5 mb-4 text-left active:scale-[0.98] transition-all">
+            <span className="text-2xl">{BODY_GUIDE_DATA[savedType].emoji}</span>
+            <div className="flex-1">
+              <div className="text-sm font-semibold text-terra-700 dark:text-terra-400">내 체형: {BODY_GUIDE_DATA[savedType].name}</div>
+              <div className="text-[11px] text-warm-600 dark:text-warm-400">탭하여 가이드 보기</div>
+            </div>
+            <ChevronRight size={16} className="text-terra-500" />
+          </button>
+        )}
+
+        <div className="flex gap-2.5 mb-5">
+          <button onClick={() => { setQuizStep(0); setScores({}); setStep('quiz') }} className="flex-1 py-3.5 bg-terra-500 text-white rounded-2xl font-semibold text-sm active:scale-[0.98] transition-all shadow-terra">
+            체형 진단하기
+          </button>
+          <button onClick={() => setStep('select')} className="flex-1 py-3.5 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 text-warm-800 dark:text-warm-200 rounded-2xl font-medium text-sm active:scale-[0.98] transition-all">
+            직접 선택
+          </button>
+        </div>
+
+        <div className="text-xs font-semibold text-warm-500 dark:text-warm-400 uppercase tracking-widest mb-3">체형 유형</div>
+        <div className="flex flex-col gap-2.5">
+          {bodyTypes.map(([key, data]: [string, any]) => (
+            <button key={key} onClick={() => { setResultType(key); setStep('result') }} className="flex items-center gap-3 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl p-4 shadow-warm-sm text-left active:scale-[0.98] transition-all">
+              <span className="text-2xl flex-shrink-0">{data.emoji}</span>
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-warm-900 dark:text-warm-100">{data.name}</div>
+                <div className="text-[11px] text-warm-500 dark:text-warm-400 mt-0.5">{data.subtitle}</div>
+              </div>
+              <ChevronRight size={16} className="text-warm-400" />
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // 2단계: 체형 진단 퀴즈
+  if (step === 'quiz') {
+    const q = BODY_QUIZ_QUESTIONS[quizStep]
+    const progress = ((quizStep + 1) / BODY_QUIZ_QUESTIONS.length) * 100
+
+    return (
+      <div className="animate-screen-enter px-5 pt-2 pb-10">
+        <button onClick={() => { if (quizStep > 0) { setQuizStep(quizStep - 1) } else setStep('list') }} className="flex items-center gap-1 text-sm text-warm-600 dark:text-warm-400 mb-4 active:opacity-70"><ArrowLeft size={16} /> {quizStep > 0 ? '이전 질문' : '뒤로'}</button>
+
+        <div className="h-1.5 bg-warm-300 dark:bg-warm-700 rounded-full mb-5">
+          <div className="h-full bg-terra-500 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+        </div>
+
+        <div className="text-xs text-warm-500 dark:text-warm-400 font-display font-semibold mb-3">{quizStep + 1} / {BODY_QUIZ_QUESTIONS.length}</div>
+        <h2 className="font-display text-lg font-bold text-warm-900 dark:text-warm-100 tracking-tight mb-5 leading-snug">{q.question}</h2>
+
+        <div className="flex flex-col gap-2.5">
+          {q.options.map((opt, idx) => (
+            <button key={idx} onClick={() => handleQuizAnswer(opt.scores)} className="w-full bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl p-4 text-left text-sm text-warm-800 dark:text-warm-200 font-medium shadow-warm-sm active:scale-[0.98] transition-all hover:border-terra-300">
+              {opt.text}
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // 3단계: 직접 선택
+  if (step === 'select') {
+    return (
+      <div className="animate-screen-enter px-5 pt-2 pb-10">
+        <button onClick={() => setStep('list')} className="flex items-center gap-1 text-sm text-warm-600 dark:text-warm-400 mb-4 active:opacity-70"><ArrowLeft size={16} /> 뒤로</button>
+        <h2 className="font-display text-xl font-bold text-warm-900 dark:text-warm-100 tracking-tight mb-2">체형 직접 선택</h2>
+        <p className="text-sm text-warm-600 dark:text-warm-400 mb-5">가장 비슷한 체형을 선택하세요</p>
+
+        <div className="grid grid-cols-2 gap-2.5">
+          {bodyTypes.map(([key, data]: [string, any]) => (
+            <button key={key} onClick={() => { setResultType(key); setStep('result') }} className="bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl p-4 text-center shadow-warm-sm active:scale-[0.97] transition-all hover:border-terra-300">
+              <div className="text-3xl mb-2">{data.emoji}</div>
+              <div className="text-sm font-semibold text-warm-900 dark:text-warm-100">{data.name}</div>
+              <div className="text-[11px] text-warm-500 dark:text-warm-400 mt-1 leading-snug">{data.subtitle}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // 4단계: 결과 상세
+  const data = resultType ? BODY_GUIDE_DATA[resultType] : null
+  if (!data) return null
+  const genderData = gender === 'female' ? data.female : data.male
 
   return (
-    <div className="animate-screen-fade px-5 pt-2 pb-10">
-      <h2 className="font-display text-xl font-bold text-warm-900 tracking-tight mb-2">체형별 코디 가이드</h2>
-      <p className="text-sm text-warm-600 mb-5">내 체형에 맞는 컬러 배치를 확인하세요</p>
-      <div className="flex flex-col gap-2.5">
-        {bodyTypes.map(([key, data]: [string, any]) => (
-          <div key={key} className="bg-white border border-warm-400 rounded-2xl p-4 shadow-warm-sm">
-            <div className="flex items-center gap-3">
-              <Ruler size={20} className="text-terra-500" />
-              <div className="flex-1"><div className="text-sm font-semibold text-warm-900">{data.name || key}</div>{data.description && <div className="text-[11px] text-warm-500 mt-0.5">{data.description}</div>}</div>
-              <ChevronRight size={16} className="text-warm-500" />
-            </div>
-          </div>
+    <div className="animate-screen-enter px-5 pt-2 pb-10">
+      <button onClick={() => setStep('list')} className="flex items-center gap-1 text-sm text-warm-600 dark:text-warm-400 mb-4 active:opacity-70"><ArrowLeft size={16} /> 목록으로</button>
+
+      {/* 헤더 */}
+      <div className="text-center mb-5">
+        <div className="text-4xl mb-2">{data.emoji}</div>
+        <h2 className="font-display text-2xl font-bold text-warm-900 dark:text-warm-100">{data.name}</h2>
+        <div className="text-sm text-warm-600 dark:text-warm-400 mt-1">{data.subtitle}</div>
+      </div>
+
+      {/* 성별 토글 */}
+      <div className="flex gap-2 justify-center mb-5">
+        {(['male', 'female'] as const).map(g => (
+          <button key={g} onClick={() => setGender(g)} className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${gender === g ? 'bg-terra-500 text-white shadow-terra' : 'bg-warm-200 dark:bg-warm-700 text-warm-600 dark:text-warm-400'}`}>
+            {g === 'male' ? '👔 남성' : '👗 여성'}
+          </button>
         ))}
+      </div>
+
+      {/* 설명 */}
+      <div className="bg-terra-50 dark:bg-terra-900/30 border border-terra-200 dark:border-terra-800 rounded-2xl p-4 mb-4">
+        <div className="text-sm text-warm-800 dark:text-warm-200 leading-relaxed">{genderData.desc}</div>
+      </div>
+
+      {/* 컬러 배치 규칙 */}
+      <div className="bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl p-4 mb-4 shadow-warm-sm">
+        <div className="text-xs font-semibold text-warm-500 dark:text-warm-400 uppercase tracking-widest mb-2">컬러 배치</div>
+        <div className="text-sm text-warm-800 dark:text-warm-200 font-medium">{data.colorRules?.summary}</div>
+        <div className="flex flex-wrap gap-2 mt-2.5">
+          {Object.entries(data.colorRules || {}).filter(([k]) => k !== 'summary').map(([part, rule]) => (
+            <div key={part} className="flex items-center gap-1.5 bg-warm-100 dark:bg-warm-700 rounded-full px-2.5 py-1 text-[11px]">
+              <span className="font-semibold text-warm-700 dark:text-warm-300">{(CATEGORY_NAMES as any)?.[part] || part}</span>
+              <span className="text-warm-500 dark:text-warm-400">{rule === 'light' ? '밝게' : rule === 'dark' ? '어둡게' : rule === 'any' ? '자유' : rule}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 추천 (DO) */}
+      <div className="bg-white dark:bg-warm-800 border border-green-200 dark:border-green-800 rounded-2xl p-4 mb-3 shadow-warm-sm">
+        <div className="flex items-center gap-1.5 text-sm font-bold text-green-700 dark:text-green-400 mb-3">
+          <CheckCircle size={16} /> 이렇게 입으세요
+        </div>
+        <div className="flex flex-col gap-2">
+          {genderData.doList.map((item, idx) => (
+            <div key={idx} className="flex items-start gap-2 text-[12px] text-warm-700 dark:text-warm-300 leading-relaxed">
+              <span className="text-green-500 mt-0.5 flex-shrink-0">✓</span>
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 피하세요 (DON'T) */}
+      <div className="bg-white dark:bg-warm-800 border border-red-200 dark:border-red-800 rounded-2xl p-4 mb-5 shadow-warm-sm">
+        <div className="flex items-center gap-1.5 text-sm font-bold text-red-600 dark:text-red-400 mb-3">
+          <XCircle size={16} /> 피해주세요
+        </div>
+        <div className="flex flex-col gap-2">
+          {genderData.dontList.map((item, idx) => (
+            <div key={idx} className="flex items-start gap-2 text-[12px] text-warm-700 dark:text-warm-300 leading-relaxed">
+              <span className="text-red-400 mt-0.5 flex-shrink-0">✕</span>
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 저장 + 코디 추천 */}
+      <div className="flex flex-col gap-2.5">
+        <button onClick={() => { handleSave(); alert('체형이 저장되었어요! 코디 추천에 반영됩니다.') }} className="w-full py-3.5 bg-terra-500 text-white rounded-2xl font-semibold text-sm active:scale-[0.98] transition-all shadow-terra">
+          내 체형으로 저장하기
+        </button>
+        <button onClick={() => navigate('/home/recommend')} className="w-full py-3 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 text-warm-800 dark:text-warm-200 rounded-2xl font-medium text-sm active:scale-[0.98] transition-all">
+          이 체형으로 코디 추천받기
+        </button>
       </div>
     </div>
   )
@@ -273,34 +763,224 @@ export function PcSelect() {
   const navigate = useNavigate()
   const current = profile.getPersonalColor()
   const currentData = current ? (PERSONAL_COLOR_12 as any)[current] : null
+  const [mode, setMode] = useState<'menu' | 'quiz' | 'result' | 'select'>('menu')
+  const [quizStep, setQuizStep] = useState(0)
+  const [scores, setScores] = useState<Record<string, number>>({})
+  const [resultType, setResultType] = useState<string | null>(null)
+
+  const diagnosis = PERSONAL_COLOR_DIAGNOSIS
+  const questions = diagnosis?.questions || []
+
+  const handleQuizAnswer = (optScore: Record<string, number>) => {
+    const newScores = { ...scores }
+    Object.entries(optScore).forEach(([k, v]) => { newScores[k] = (newScores[k] || 0) + v })
+    setScores(newScores)
+
+    if (quizStep < questions.length - 1) {
+      setQuizStep(quizStep + 1)
+    } else {
+      // 결과 계산 — 원본 answerPCQuiz 로직 포팅
+      const s = newScores
+      const isWarm = (s.warm || 0) > (s.cool || 0)
+      let season = isWarm
+        ? ((s.spring || 0) > (s.autumn || 0) ? 'spring' : 'autumn')
+        : ((s.summer || 0) > (s.winter || 0) ? 'summer' : 'winter')
+
+      const lightS = s.light || 0, brightS = s.bright || 0, trueS = s.true || 0, mutedS = s.muted || 0, softS = s.soft || 0, deepS = s.deep || 0
+      let subType
+      if (season === 'spring') subType = lightS >= brightS && lightS >= trueS ? 'light' : brightS >= trueS ? 'bright' : 'true'
+      else if (season === 'summer') subType = lightS >= mutedS && lightS >= trueS ? 'light' : mutedS >= trueS ? 'muted' : 'true'
+      else if (season === 'autumn') subType = softS >= deepS && softS >= trueS ? 'soft' : deepS >= trueS ? 'deep' : 'true'
+      else subType = brightS >= deepS && brightS >= trueS ? 'bright' : deepS >= trueS ? 'deep' : 'true'
+
+      const result = `${season}_${subType}`
+      setResultType(result)
+      setMode('result')
+    }
+  }
 
   const setPC = (key: string) => {
     profile.setPersonalColor(key)
-    alert((PERSONAL_COLOR_12 as any)[key]?.name + '으로 설정했어요!')
     navigate('/profile', { replace: true })
   }
 
-  return (
-    <div className="animate-screen-fade px-5 pt-2 pb-10">
-      <h2 className="font-display text-xl font-bold text-warm-900 tracking-tight mb-2">퍼스널컬러</h2>
-      {currentData ? (
-        <div className="bg-terra-100 border border-terra-200 rounded-2xl p-4 mb-5">
-          <div className="text-sm font-semibold text-terra-700 mb-0.5">현재 설정: {currentData.name}</div>
-          <div className="text-[11px] text-warm-600">{currentData.description || ''}</div>
-          <button onClick={() => { profile.setPersonalColor(''); navigate('/profile/personal-color', { replace: true }) }}
-            className="text-xs text-terra-600 mt-2 active:opacity-70">다시 진단하기</button>
-        </div>
-      ) : (
-        <p className="text-sm text-warm-600 mb-5">퍼스널컬러를 설정하면 맞춤 추천을 받을 수 있어요</p>
-      )}
+  // 메인 메뉴
+  if (mode === 'menu') {
+    return (
+      <div className="animate-screen-fade px-5 pt-2 pb-10">
+        <h2 className="font-display text-xl font-bold text-warm-900 dark:text-warm-100 tracking-tight mb-2">퍼스널컬러</h2>
 
-      <div className="text-xs font-semibold text-warm-600 uppercase tracking-wider mb-3">12계절 직접 선택</div>
+        {currentData && (
+          <div className="bg-terra-100 dark:bg-terra-900/30 border border-terra-200 dark:border-terra-800 rounded-2xl p-4 mb-5">
+            <div className="text-sm font-semibold text-terra-700 dark:text-terra-400 mb-0.5">현재 설정: {currentData.name}</div>
+            <div className="text-[11px] text-warm-600 dark:text-warm-400">{currentData.description || ''}</div>
+            {currentData.bestColors && (
+              <div className="flex gap-1 mt-2">
+                {currentData.bestColors.slice(0, 6).map((ck: string) => {
+                  const c = COLORS_60[ck]; return c ? <div key={ck} className="w-5 h-5 rounded-full border border-warm-400/50" style={{ background: c.hex }} /> : null
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!currentData && <p className="text-sm text-warm-600 dark:text-warm-400 mb-5">퍼스널컬러를 설정하면 맞춤 추천을 받을 수 있어요</p>}
+
+        <div className="flex flex-col gap-3 mb-5">
+          <button onClick={() => { setQuizStep(0); setScores({}); setMode('quiz') }} className="w-full flex items-center gap-4 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl p-5 text-left shadow-warm-sm active:scale-[0.98] transition-all">
+            <div className="w-12 h-12 rounded-xl bg-terra-100 dark:bg-terra-900/30 flex items-center justify-center flex-shrink-0">
+              <HelpCircle size={24} className="text-terra-600 dark:text-terra-400" />
+            </div>
+            <div>
+              <div className="text-[15px] font-semibold text-warm-900 dark:text-warm-100">셀프 진단</div>
+              <div className="text-xs text-warm-600 dark:text-warm-400 mt-0.5">{questions.length}개 질문으로 내 퍼스널컬러 찾기</div>
+            </div>
+          </button>
+
+          <button onClick={() => navigate('/profile/personal-color/light')} className="w-full flex items-center gap-4 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl p-5 text-left shadow-warm-sm active:scale-[0.98] transition-all">
+            <div className="w-12 h-12 rounded-xl bg-warm-200 dark:bg-warm-700 flex items-center justify-center flex-shrink-0">
+              <span className="text-2xl">💡</span>
+            </div>
+            <div>
+              <div className="text-[15px] font-semibold text-warm-900 dark:text-warm-100">빛 진단</div>
+              <div className="text-xs text-warm-600 dark:text-warm-400 mt-0.5">자연광에서 직접 비교하는 정밀 진단</div>
+            </div>
+          </button>
+
+          <button onClick={() => setMode('select')} className="w-full flex items-center gap-4 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl p-5 text-left shadow-warm-sm active:scale-[0.98] transition-all">
+            <div className="w-12 h-12 rounded-xl bg-warm-200 dark:bg-warm-700 flex items-center justify-center flex-shrink-0">
+              <Palette size={24} className="text-warm-700 dark:text-warm-300" />
+            </div>
+            <div>
+              <div className="text-[15px] font-semibold text-warm-900 dark:text-warm-100">직접 선택</div>
+              <div className="text-xs text-warm-600 dark:text-warm-400 mt-0.5">이미 알고 있다면 12계절 중 선택</div>
+            </div>
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // 셀프 진단 퀴즈
+  if (mode === 'quiz') {
+    const q = questions[quizStep]
+    if (!q) return null
+    const progress = ((quizStep + 1) / questions.length) * 100
+
+    return (
+      <div className="animate-screen-enter px-5 pt-2 pb-10">
+        <button onClick={() => { if (quizStep > 0) setQuizStep(quizStep - 1); else setMode('menu') }} className="flex items-center gap-1 text-sm text-warm-600 dark:text-warm-400 mb-4 active:opacity-70">
+          <ArrowLeft size={16} /> {quizStep > 0 ? '이전 질문' : '뒤로'}
+        </button>
+
+        <div className="h-1.5 bg-warm-300 dark:bg-warm-700 rounded-full mb-5">
+          <div className="h-full bg-terra-500 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+        </div>
+
+        <div className="text-xs text-warm-500 dark:text-warm-400 font-display font-semibold mb-3">{quizStep + 1} / {questions.length}</div>
+        <h2 className="font-display text-lg font-bold text-warm-900 dark:text-warm-100 tracking-tight mb-5 leading-snug">{q.question}</h2>
+
+        <div className="flex flex-col gap-2.5">
+          {q.options.map((opt, idx) => (
+            <button key={idx} onClick={() => handleQuizAnswer(opt.score)} className="w-full bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl p-4 text-left text-sm text-warm-800 dark:text-warm-200 font-medium shadow-warm-sm active:scale-[0.98] transition-all hover:border-terra-300">
+              {opt.text}
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // 진단 결과
+  if (mode === 'result') {
+    const pcData = resultType ? (PERSONAL_COLOR_12 as any)[resultType] : null
+    // 폴백: 4계절 간략 결과
+    const fallbackData = resultType ? diagnosis.results?.[resultType.replace('_light','_warm').replace('_bright','_warm').replace('_true','_warm').replace('_muted','_cool').replace('_soft','_warm').replace('_deep','_cool')] : null
+    const displayData = pcData || fallbackData
+
+    return (
+      <div className="animate-screen-enter px-5 pt-2 pb-10">
+        <div className="text-center py-6">
+          <div className="text-5xl mb-3">🎨</div>
+          <h2 className="font-display text-2xl font-bold text-warm-900 dark:text-warm-100 mb-1">
+            {displayData?.name || resultType}
+          </h2>
+          <p className="text-sm text-warm-600 dark:text-warm-400 leading-relaxed mt-2 px-4">
+            {displayData?.description || ''}
+          </p>
+        </div>
+
+        {/* 추천 컬러 팔레트 */}
+        {(displayData?.bestColors || displayData?.colors) && (
+          <div className="bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl p-4 mb-4 shadow-warm-sm">
+            <div className="text-xs font-semibold text-warm-500 dark:text-warm-400 uppercase tracking-widest mb-3">추천 컬러</div>
+            <div className="flex gap-2 flex-wrap">
+              {(displayData.bestColors || displayData.colors || []).slice(0, 10).map((ck: string) => {
+                const c = COLORS_60[ck]
+                if (!c) return null
+                return (
+                  <div key={ck} className="flex flex-col items-center gap-1">
+                    <div className="w-10 h-10 rounded-xl border border-warm-400/50" style={{ background: c.hex }} />
+                    <span className="text-[9px] text-warm-600 dark:text-warm-400">{c.name}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 피해야 할 컬러 */}
+        {displayData?.worstColors && (
+          <div className="bg-white dark:bg-warm-800 border border-red-200 dark:border-red-800 rounded-2xl p-4 mb-5 shadow-warm-sm">
+            <div className="text-xs font-semibold text-red-500 dark:text-red-400 uppercase tracking-widest mb-3">피해야 할 컬러</div>
+            <div className="flex gap-2 flex-wrap">
+              {displayData.worstColors.slice(0, 6).map((ck: string) => {
+                const c = COLORS_60[ck]
+                if (!c) return null
+                return (
+                  <div key={ck} className="flex flex-col items-center gap-1">
+                    <div className="w-10 h-10 rounded-xl border border-warm-400/50 relative" style={{ background: c.hex }}>
+                      <div className="absolute inset-0 flex items-center justify-center"><span className="text-white text-lg font-bold drop-shadow">✕</span></div>
+                    </div>
+                    <span className="text-[9px] text-warm-600 dark:text-warm-400">{c.name}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2.5">
+          <button onClick={() => { if (resultType) setPC(resultType) }} className="w-full py-3.5 bg-terra-500 text-white rounded-2xl font-semibold text-sm active:scale-[0.98] transition-all shadow-terra">
+            이 결과로 설정하기
+          </button>
+          <button onClick={() => { setQuizStep(0); setScores({}); setMode('quiz') }} className="w-full py-3 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 text-warm-800 dark:text-warm-200 rounded-2xl font-medium text-sm active:scale-[0.98] transition-all">
+            다시 진단하기
+          </button>
+          <button onClick={() => setMode('select')} className="text-sm text-terra-600 dark:text-terra-400 text-center py-2 active:opacity-70">
+            직접 선택할게요 →
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // 12계절 직접 선택
+  return (
+    <div className="animate-screen-enter px-5 pt-2 pb-10">
+      <button onClick={() => setMode('menu')} className="flex items-center gap-1 text-sm text-warm-600 dark:text-warm-400 mb-4 active:opacity-70">
+        <ArrowLeft size={16} /> 뒤로
+      </button>
+
+      <h2 className="font-display text-xl font-bold text-warm-900 dark:text-warm-100 tracking-tight mb-2">12계절 직접 선택</h2>
+      <p className="text-sm text-warm-600 dark:text-warm-400 mb-5">이미 퍼스널컬러를 알고 있다면 선택하세요</p>
+
       <div className="grid grid-cols-2 gap-2.5">
         {Object.entries(PERSONAL_COLOR_12).filter(([k]) => !['spring', 'summer', 'autumn', 'winter'].includes(k)).map(([key, data]: [string, any]) => (
           <button key={key} onClick={() => setPC(key)}
-            className={`bg-white border rounded-2xl p-4 text-left shadow-warm-sm active:scale-[0.97] transition-all ${current === key ? 'border-terra-400 bg-terra-50' : 'border-warm-400'}`}>
-            <div className="text-sm font-semibold text-warm-900">{data.name}</div>
-            <div className="text-[10px] text-warm-500 mt-0.5 line-clamp-2">{data.description || ''}</div>
+            className={`bg-white dark:bg-warm-800 border rounded-2xl p-4 text-left shadow-warm-sm active:scale-[0.97] transition-all ${current === key ? 'border-terra-400 bg-terra-50 dark:bg-terra-900/30' : 'border-warm-400 dark:border-warm-600'}`}>
+            <div className="text-sm font-semibold text-warm-900 dark:text-warm-100">{data.name}</div>
+            <div className="text-[10px] text-warm-500 dark:text-warm-400 mt-0.5 line-clamp-2">{data.description || ''}</div>
             {data.bestColors && (
               <div className="flex gap-1 mt-2">
                 {data.bestColors.slice(0, 5).map((ck: string) => {

@@ -5,6 +5,7 @@ import { STYLE_GUIDE, MOOD_GROUPS, LAYER_LEVELS } from '@/lib/styles'
 import { STYLE_MOODS } from '@/lib/styleMoods'
 import { CATEGORY_NAMES } from '@/lib/categories'
 import { profile } from '@/lib/profile'
+import { evaluationSystem } from '@/lib/evaluation'
 
 // @ts-nocheck
 
@@ -231,8 +232,38 @@ export function useBuild(mode: BuildMode = 'coord') {
 
   // ── 점수 계산 (간이) ──
   const getScore = useCallback(() => {
-    const filled = Object.values(state.colors).filter(Boolean)
-    return 50 + filled.length * 8 + (state.style ? 5 : 0)
+    const outfit: Record<string, string> = {}
+    Object.entries(state.colors).forEach(([k, v]) => { if (v) outfit[k] = v })
+    if (Object.keys(outfit).length < 2) return 0
+    try {
+      const pc = profile.getPersonalColor()
+      return evaluationSystem.evaluate(outfit, pc).total
+    } catch { return 0 }
+  }, [state])
+
+  // 전체 평가 결과 (점수 분해도 포함)
+  const getEvalResult = useCallback(() => {
+    const outfit: Record<string, string> = {}
+    Object.entries(state.colors).forEach(([k, v]) => { if (v) outfit[k] = v })
+    if (Object.keys(outfit).length < 2) return null
+    try {
+      const pc = profile.getPersonalColor()
+      return evaluationSystem.evaluate(outfit, pc)
+    } catch { return null }
+  }, [state])
+
+  // 색상 교체 시 점수 변화 미리보기
+  const calcScoreDelta = useCallback((part: string, newColorKey: string) => {
+    const outfit: Record<string, string> = {}
+    Object.entries(state.colors).forEach(([k, v]) => { if (v) outfit[k] = v })
+    if (Object.keys(outfit).length < 2) return 0
+    try {
+      const pc = profile.getPersonalColor()
+      const baseScore = evaluationSystem.evaluate(outfit, pc).total
+      const testOutfit = { ...outfit, [part]: newColorKey }
+      const newScore = evaluationSystem.evaluate(testOutfit, pc).total
+      return newScore - baseScore
+    } catch { return 0 }
   }, [state])
 
   // outfitHex for mannequin
@@ -249,7 +280,7 @@ export function useBuild(mode: BuildMode = 'coord') {
     setGarment, confirmGarment,
     selectColor, confirmColor, processNext,
     answerOptional,
-    getColorRecommendations, editPart, getScore,
+    getColorRecommendations, editPart, getScore, getEvalResult, calcScoreDelta,
     outfitHex,
   }
 }

@@ -43,13 +43,28 @@ export default function Closet() {
 // 내 옷장 탭
 // ═══════════════════════════════════════
 function WardrobeTab({ navigate }: { navigate: any }) {
-  const items = useMemo(() => {
+  const [items, setItems] = useState(() => {
     try { return JSON.parse(localStorage.getItem('sp_wardrobe') || '[]') } catch { return [] }
-  }, [])
+  })
   const [filter, setFilter] = useState<string | null>(null)
 
-  const categories = ['상의', '하의', '아우터', '신발', '가방', '기타']
-  const filtered = filter ? items.filter((i: any) => i.category === filter) : items
+  // colorKey 호환: item.color || item.colorKey
+  const getColor = (item: any) => item.color || item.colorKey || null
+  // category 호환: 영문 → 한글 매핑
+  const catMap: Record<string, string> = { outer: '아우터', middleware: '미들웨어', top: '상의', bottom: '하의', shoes: '신발', scarf: '목도리', hat: '모자' }
+  const getCatKo = (item: any) => catMap[item.category] || item.category || '기타'
+
+  const categories = ['상의', '하의', '아우터', '미들웨어', '신발', '목도리', '모자', '가방', '기타']
+  const filtered = filter ? items.filter((i: any) => getCatKo(i) === filter || i.category === filter) : items
+
+  const handleDelete = (idx: number) => {
+    if (!confirm('이 아이템을 삭제할까요?')) return
+    const globalIdx = filter ? items.indexOf(filtered[idx]) : idx
+    const next = [...items]
+    next.splice(globalIdx, 1)
+    setItems(next)
+    localStorage.setItem('sp_wardrobe', JSON.stringify(next))
+  }
 
   return (
     <div>
@@ -58,17 +73,18 @@ function WardrobeTab({ navigate }: { navigate: any }) {
         <button
           onClick={() => setFilter(null)}
           className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium transition-all ${
-            !filter ? 'bg-warm-900 text-white' : 'bg-warm-100 border border-warm-300 text-warm-600 active:scale-95'
+            !filter ? 'bg-warm-900 dark:bg-warm-100 text-white dark:text-warm-900' : 'bg-warm-100 dark:bg-warm-800 border border-warm-300 dark:border-warm-600 text-warm-600 dark:text-warm-400 active:scale-95'
           }`}
         >전체 ({items.length})</button>
         {categories.map(cat => {
-          const count = items.filter((i: any) => i.category === cat).length
+          const count = items.filter((i: any) => getCatKo(i) === cat || i.category === cat).length
+          if (count === 0) return null
           return (
             <button
               key={cat}
               onClick={() => setFilter(filter === cat ? null : cat)}
               className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium transition-all ${
-                filter === cat ? 'bg-warm-900 text-white' : 'bg-warm-100 border border-warm-300 text-warm-600 active:scale-95'
+                filter === cat ? 'bg-warm-900 dark:bg-warm-100 text-white dark:text-warm-900' : 'bg-warm-100 dark:bg-warm-800 border border-warm-300 dark:border-warm-600 text-warm-600 dark:text-warm-400 active:scale-95'
               }`}
             >{cat} ({count})</button>
           )
@@ -79,12 +95,20 @@ function WardrobeTab({ navigate }: { navigate: any }) {
       {filtered.length > 0 ? (
         <div className="grid grid-cols-3 gap-2.5">
           {filtered.map((item: any, idx: number) => {
-            const c = COLORS_60[item.color]
+            const colorKey = getColor(item)
+            const c = colorKey ? COLORS_60[colorKey] : null
             return (
-              <div key={idx} className="bg-white border border-warm-400 rounded-2xl p-3 text-center shadow-warm-sm">
-                <div className="w-10 h-10 rounded-lg mx-auto mb-2 border border-warm-300" style={{ background: c?.hex || '#ccc' }} />
-                <div className="text-[11px] font-semibold text-warm-900 truncate">{c?.name || item.color}</div>
-                <div className="text-[10px] text-warm-500">{item.category}</div>
+              <div key={item.id || idx} className="bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-2xl p-3 text-center shadow-warm-sm relative group">
+                {/* 썸네일 or 컬러 블록 */}
+                {item.photoThumb ? (
+                  <img src={item.photoThumb} className="w-10 h-10 rounded-lg mx-auto mb-2 object-cover border border-warm-300" alt="" />
+                ) : (
+                  <div className="w-10 h-10 rounded-lg mx-auto mb-2 border border-warm-300" style={{ background: c?.hex || '#ccc' }} />
+                )}
+                <div className="text-[11px] font-semibold text-warm-900 dark:text-warm-100 truncate">{item.name || c?.name || colorKey}</div>
+                <div className="text-[10px] text-warm-500 dark:text-warm-400">{getCatKo(item)}</div>
+                {/* 삭제 버튼 (호버/탭) */}
+                <button onClick={() => handleDelete(idx)} className="absolute top-1 right-1 w-5 h-5 rounded-full bg-warm-300/80 dark:bg-warm-600/80 text-warm-600 dark:text-warm-300 text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity">✕</button>
               </div>
             )
           })}
@@ -92,7 +116,7 @@ function WardrobeTab({ navigate }: { navigate: any }) {
       ) : (
         <div className="text-center py-16">
           <Shirt size={40} className="text-warm-400 mx-auto mb-3" />
-          <div className="text-sm text-warm-600 mb-4">옷장이 비어있어요</div>
+          <div className="text-sm text-warm-600 dark:text-warm-400 mb-4">옷장이 비어있어요</div>
           <button
             onClick={() => navigate('/closet/add')}
             className="px-5 py-2.5 bg-terra-500 text-white rounded-full text-sm font-semibold active:scale-95 transition-all shadow-terra"

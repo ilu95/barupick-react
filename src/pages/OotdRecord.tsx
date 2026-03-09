@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Palette, Image, Tag, Smile, Eye, Calendar, Check, Camera, Lock, Users, Globe, X } from 'lucide-react'
+import { Palette, Image, Tag, Smile, Eye, Calendar, Check, Camera, Lock, Users, Globe, X, Pencil } from 'lucide-react'
 import MannequinSVG from '@/components/mannequin/MannequinSVG'
 import ColorPicker from '@/components/ui/ColorPicker'
+import ImageEditor from '@/components/ui/ImageEditor'
 import { COLORS_60 } from '@/lib/colors'
 import { useOotd } from '@/hooks/useOotd'
 import { useAuth } from '@/contexts/AuthContext'
@@ -36,7 +37,9 @@ export default function OotdRecord() {
     }
   }, [])
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [customSit, setCustomSit] = useState(false)
+  const [editingPhotoIdx, setEditingPhotoIdx] = useState<number | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   // 마네킹 미리보기용 hex 변환
@@ -49,16 +52,33 @@ export default function OotdRecord() {
   })
 
   const handleSave = () => {
-    if (!ootd.canSave) return
-    if (ootd.needsPhoto) return
-    const ok = ootd.saveRecord()
-    if (ok) {
-      setSaved(true)
-      setTimeout(() => {
-        setSaved(false)
-        ootd.resetForm()
-        navigate('/closet')
-      }, 1500)
+    if (!ootd.canSave) {
+      setSaveError('2색 이상 선택해주세요')
+      setTimeout(() => setSaveError(''), 2000)
+      return
+    }
+    if (ootd.needsPhoto) {
+      setSaveError('전체 공개는 착용샷이 필수예요')
+      setTimeout(() => setSaveError(''), 2000)
+      return
+    }
+    try {
+      const ok = ootd.saveRecord()
+      if (ok) {
+        setSaved(true)
+        setTimeout(() => {
+          setSaved(false)
+          ootd.resetForm()
+          navigate('/closet')
+        }, 1500)
+      } else {
+        setSaveError('저장에 실패했어요. 다시 시도해주세요')
+        setTimeout(() => setSaveError(''), 2000)
+      }
+    } catch (e) {
+      console.error('Save error:', e)
+      setSaveError('저장 중 오류가 발생했어요')
+      setTimeout(() => setSaveError(''), 2000)
     }
   }
 
@@ -116,8 +136,8 @@ export default function OotdRecord() {
               <button
                 key={part}
                 onClick={() => ootd.setOpenPicker(isOpen ? null : part)}
-                className={`flex flex-col items-center gap-1.5 p-2.5 bg-white border ${
-                  isOpen ? 'border-terra-400 shadow-warm' : 'border-warm-400 shadow-warm-sm'
+                className={`flex flex-col items-center gap-1.5 p-2.5 bg-white dark:bg-warm-800 border ${
+                  isOpen ? 'border-terra-400 shadow-warm' : 'border-warm-400 dark:border-warm-600 shadow-warm-sm'
                 } rounded-xl active:scale-95 transition-all relative`}
               >
                 <div
@@ -161,8 +181,14 @@ export default function OotdRecord() {
       >
         <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
           {ootd.photos.map((photo, idx) => (
-            <div key={idx} className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 relative">
+            <div key={idx} className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 relative group">
               <img src={photo} className="w-full h-full object-cover" alt="" />
+              {/* 편집 버튼 */}
+              <button
+                onClick={() => setEditingPhotoIdx(idx)}
+                className="absolute bottom-0.5 left-0.5 w-5 h-5 rounded-full bg-black/50 text-white flex items-center justify-center"
+              ><Pencil size={9} /></button>
+              {/* 삭제 버튼 */}
               <button
                 onClick={() => ootd.removePhoto(idx)}
                 className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/50 text-white text-[10px] flex items-center justify-center"
@@ -170,14 +196,26 @@ export default function OotdRecord() {
             </div>
           ))}
           {ootd.photos.length < 4 && (
-            <label className="w-16 h-16 rounded-xl border-2 border-dashed border-warm-400 flex flex-col items-center justify-center cursor-pointer flex-shrink-0 active:scale-95 transition-all bg-warm-100">
-              <Camera size={18} className="text-warm-600" />
+            <label className="w-16 h-16 rounded-xl border-2 border-dashed border-warm-400 dark:border-warm-600 flex flex-col items-center justify-center cursor-pointer flex-shrink-0 active:scale-95 transition-all bg-warm-100 dark:bg-warm-800">
+              <Camera size={18} className="text-warm-600 dark:text-warm-400" />
               <span className="text-[9px] text-warm-500 mt-0.5">추가</span>
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoAdd} />
             </label>
           )}
         </div>
       </Section>
+
+      {/* 이미지 편집기 오버레이 */}
+      {editingPhotoIdx !== null && ootd.photos[editingPhotoIdx] && (
+        <ImageEditor
+          src={ootd.photos[editingPhotoIdx]}
+          onSave={(dataUrl) => {
+            ootd.replacePhoto(editingPhotoIdx, dataUrl)
+            setEditingPhotoIdx(null)
+          }}
+          onCancel={() => setEditingPhotoIdx(null)}
+        />
+      )}
 
       {/* 상황 */}
       <Section icon={<Tag size={13} />} label="상황">
@@ -187,14 +225,14 @@ export default function OotdRecord() {
               key={s}
               onClick={() => { setCustomSit(false); ootd.setSituation(ootd.situation === s ? null : s) }}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                ootd.situation === s ? 'bg-terra-500 text-white shadow-terra' : 'bg-white border border-warm-400 text-warm-700 active:scale-95'
+                ootd.situation === s ? 'bg-terra-500 text-white shadow-terra' : 'bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 text-warm-700 dark:text-warm-300 active:scale-95'
               }`}
             >{s}</button>
           ))}
           <button
             onClick={() => { setCustomSit(!customSit); ootd.setSituation(null) }}
             className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-              customSit ? 'bg-terra-500 text-white shadow-terra' : 'bg-white border border-warm-400 text-warm-700 active:scale-95'
+              customSit ? 'bg-terra-500 text-white shadow-terra' : 'bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 text-warm-700 dark:text-warm-300 active:scale-95'
             }`}
           >✏️ 직접 입력</button>
         </div>
@@ -204,7 +242,7 @@ export default function OotdRecord() {
             type="text"
             placeholder="직접 입력 (예: 소개팅, 결혼식...)"
             maxLength={20}
-            className="w-full mt-2 bg-white border border-warm-400 rounded-xl px-3 py-2 text-xs text-warm-900 placeholder-warm-500 outline-none focus:border-terra-400 transition-all"
+            className="w-full mt-2 bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-xl px-3 py-2 text-xs text-warm-900 placeholder-warm-500 outline-none focus:border-terra-400 transition-all"
             onChange={e => ootd.setSituation(e.target.value || null)}
           />
         )}
@@ -220,7 +258,7 @@ export default function OotdRecord() {
                 key={val}
                 onClick={() => ootd.setMood(ootd.mood === val ? null : val)}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                  ootd.mood === val ? 'bg-terra-500 text-white shadow-terra' : 'bg-white border border-warm-400 text-warm-700 active:scale-95'
+                  ootd.mood === val ? 'bg-terra-500 text-white shadow-terra' : 'bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 text-warm-700 dark:text-warm-300 active:scale-95'
                 }`}
               >{val}</button>
             )
@@ -236,7 +274,7 @@ export default function OotdRecord() {
           maxLength={100}
           value={ootd.memo}
           onChange={e => ootd.setMemo(e.target.value)}
-          className="w-full bg-white border border-warm-400 rounded-xl px-3 py-2.5 text-xs text-warm-900 placeholder-warm-500 outline-none focus:border-terra-400 transition-all"
+          className="w-full bg-white dark:bg-warm-800 border border-warm-400 dark:border-warm-600 rounded-xl px-3 py-2.5 text-xs text-warm-900 placeholder-warm-500 outline-none focus:border-terra-400 transition-all"
         />
       </div>
 
@@ -296,10 +334,24 @@ export default function OotdRecord() {
         </div>
       )}
 
+      {/* 에러 피드백 */}
+      {saveError && (
+        <div className="mb-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-3.5 py-2.5 animate-screen-fade">
+          <div className="text-xs font-semibold text-red-700 dark:text-red-400">{saveError}</div>
+        </div>
+      )}
+
+      {/* 선택 상태 안내 */}
+      {ootd.filledCount < 2 && (
+        <div className="mb-2 text-center text-[11px] text-warm-500 dark:text-warm-400">
+          컬러를 {2 - ootd.filledCount}개 더 선택하면 기록할 수 있어요
+        </div>
+      )}
+
       {/* CTA */}
       <button
         onClick={handleSave}
-        className={`w-full py-3.5 ${ootd.canSave && !ootd.needsPhoto ? 'bg-terra-500 shadow-terra' : 'bg-warm-400'} text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all mb-2`}
+        className={`w-full py-3.5 ${ootd.canSave && !ootd.needsPhoto ? 'bg-terra-500 shadow-terra active:scale-[0.98]' : 'bg-warm-400 dark:bg-warm-600 opacity-60 cursor-not-allowed'} text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 transition-all mb-2`}
       >
         <Check size={16} /> {ootd.editId ? '수정 완료' : '기록하기'}
       </button>
